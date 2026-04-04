@@ -1,0 +1,49 @@
+{
+  "notes": "仅用于缓存目录中的调试和查漏补缺，记录被抑制或未进入最终结论的 URL、域名与调证值候选。",
+  "sample": {
+    "target": "/samples/demo.apk",
+    "analysis_mode": "full",
+    "generated_at": "2026-04-04T00:00:00+00:00"
+  },
+  "callback_noise": {
+    "selection_reason": "优先采用反编译代码推理结果，因为发现了一方源码中的域名常量与拼接 URL。",
+    "first_party_suppressed_count": 1,
+    "first_party_suppressed_examples": [
+      {
+        "source": "sources/com/demo/R.java",
+        "candidate": "layout.main.xml",
+        "reason": "package_or_resource_noise"
+      }
+    ],
+    "third_party_url_examples": [
+      "https://www.google.com"
+    ],
+    "third_party_domain_examples": [
+      "www.google.com"
+    ],
+    "third_party_suppressed_count": 3,
+    "third_party_suppressed_examples": [
+      {
+        "source": "sources/okhttp/License.java",
+        "candidate": "license.example.com",
+        "reason": "low_context_code_domain"
+      }
+    ]
+  },
+  "sdk_key_noise": {
+    "suppressed_candidates": 2,
+    "suppressed_breakdown": {
+      "low_context": 1,
+      "placeholder": 1,
+      "unresolved_ref": 0
+    },
+    "suppressed_examples": [
+      {
+        "source": "assets/config.json",
+        "field_name": "appKey",
+        "raw_value": "@string/demo_key",
+        "reason": "placeholder"
+      }
+    ]
+  }
+}

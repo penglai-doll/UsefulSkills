@@ -1,0 +1,84 @@
+{
+  "selection_reason": "优先采用反编译代码推理结果，因为发现了一方源码中的域名常量与拼接 URL。",
+  "string_scan": {
+    "notes": "第一阶段保留字符串级候选；其中一方候选优先展示，第三方库候选仅作摘要，并抑制明显包名、资源名和低上下文伪域名。",
+    "first_party_candidates": {
+      "endpoints": {
+        "urls": [
+          "https://demo-c2.example/api/upload"
+        ],
+        "domains": [
+          "demo-c2.example"
+        ],
+        "ips": [],
+        "emails": []
+      },
+      "clues": [
+        {
+          "source": "sources/com/demo/net/Config.java",
+          "value": "baseUrl = https://demo-c2.example/api/"
+        }
+      ],
+      "suppressed_domain_count": 1,
+      "suppressed_examples": [
+        {
+          "source": "sources/com/demo/R.java",
+          "candidate": "layout.main.xml",
+          "reason": "package_or_resource_noise"
+        }
+      ]
+    },
+    "third_party_summary": {
+      "url_count": 1,
+      "domain_count": 1,
+      "sample_urls": [
+        "https://www.google.com"
+      ],
+      "sample_domains": [
+        "www.google.com"
+      ],
+      "suppressed_domain_count": 3,
+      "suppressed_examples": [
+        {
+          "source": "sources/okhttp/License.java",
+          "candidate": "license.example.com",
+          "reason": "low_context_code_domain"
+        }
+      ]
+    }
+  },
+  "code_inference": {
+    "endpoints": {
+      "urls": [
+        "https://demo-c2.example/api/upload"
+      ],
+      "domains": [
+        "demo-c2.example"
+      ],
+      "ips": [],
+      "emails": []
+    },
+    "clues": [
+      {
+        "source": "sources/com/demo/net/Config.java",
+        "value": "\"https://\" + host + \"/api/upload\""
+      }
+    ]
+  },
+  "endpoints": {
+    "urls": [
+      "https://demo-c2.example/api/upload"
+    ],
+    "domains": [
+      "demo-c2.example"
+    ],
+    "ips": [],
+    "emails": []
+  },
+  "clues": [
+    {
+      "source": "sources/com/demo/net/Config.java",
+      "value": "\"https://\" + host + \"/api/upload\""
+    }
+  ]
+}

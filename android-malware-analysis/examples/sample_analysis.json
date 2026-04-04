@@ -1,0 +1,54 @@
+{
+  "sample": {
+    "target": "/samples/demo.apk",
+    "package_source": "/samples/demo.apk",
+    "package_type": "apk",
+    "risk_level": "high",
+    "risk_score": 87,
+    "analysis_mode": "full",
+    "generated_at": "2026-04-04T00:00:00+00:00"
+  },
+  "base_info": {
+    "package_name": "com.demo.shell",
+    "launcher_activity": "com.demo.entry.MainActivity",
+    "application_name": "com.demo.app.App",
+    "dangerous_permissions": [
+      "android.permission.READ_SMS",
+      "android.permission.RECORD_AUDIO"
+    ],
+    "special_permissions": [
+      "android.permission.SYSTEM_ALERT_WINDOW"
+    ]
+  },
+  "technical_profile": {
+    "primary_type": "webview-hybrid",
+    "types": [
+      {
+        "name": "webview-hybrid",
+        "score": 2,
+        "evidence": [
+          "assets/www/index.html: 资源特征",
+          "sources/com/demo/bridge/AppBridge.java: WebView 初始化"
+        ]
+      }
+    ]
+  },
+  "functional_profile": [
+    {
+      "name": "information-stealing",
+      "score": 5,
+      "confidence": "high",
+      "evidence": [
+        "高危运行时权限覆盖短信、联系人、标识符、媒体或存储等敏感数据面。",
+        "敏感数据采集能力与回连基础设施同时存在。"
+      ]
+    }
+  ],
+  "artifacts": {
+    "analysis_json": "cache/demo/analysis.json",
+    "callback_config_json": "cache/demo/callback-config.json",
+    "noise_log_json": "cache/demo/noise-log.json",
+    "markdown_report": "报告/demo/report.md",
+    "docx_report": "报告/demo/report.docx"
+  }
+}
