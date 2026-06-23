@@ -6,14 +6,16 @@
 
 ### 目前已经完成/计划
 
-- [x] 恶意APK分析器4.1.1
-  - 两种模式：简要、详尽
-  - 三层运行：离线基础、本地增强、扩展升级
-  - 联网可选：AI+被动网络搜索辅助研判
+- [x] 恶意APK分析器5.0.0
+  - 默认面向案件固证，按需升级为 Java/Native 深度逆向
+  - apktool 优先建立可复用工作区，盘点 Manifest、资源、assets、隐藏载荷与 SO
+  - 以 `evidence_id`、来源、提取方法和状态替代冗杂总风险评分
+  - 默认支持 AI+被动网络搜索辅助 SDK、域名和调证字段归属，并通过 `review-queue` / `review-decisions` 回写审阅结论
   - 报告与中间产物统一输出到 `output/<sample>/report` 和 `output/<sample>/cache`
-  - 已支持 manifest / 资源 / 一方配置中的 SDK 调证值提取与风险展示
-  - 已支持 Native 静态增强分析：JNI 桥、符号画像、函数画像、Ghidra/rizin/radare2 交叉校验、Capstone 指令解码、Unicorn 受控执行规划、YARA 规则画像
-  - 报告结构已重构为：样本简介、样本分析结果、研判支撑、技术细节、风险画像、其他补充
+  - 已支持 SDK/平台调证值、回连候选、签名证书、渠道标识、打包环境、嵌套载荷和关键哈希提取
+  - ZIP fallback、符号链接、超大文本和 Native strings 均采用有界扫描；专用 provider 仅提交命中规则的 `styles.xml/info` 密文
+  - Native 深挖仅对证据选中的 SO 调用 Ghidra/Rizin、Capstone、Unicorn 和 YARA
+  - 报告拆分为固证报告和逆向技术附录；动态测试在 v5.0 仅保留接口契约
 - [ ] 舆情分析
 
 尽可能以更优（各种奇怪渠道？）的方式不断完善实现
