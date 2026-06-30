@@ -17,6 +17,14 @@
   - ZIP fallback、符号链接、超大文本和 Native strings 均采用有界扫描；专用 provider 仅提交命中规则的 `styles.xml/info` 密文
   - Native 深挖仅对证据选中的 SO 调用 Ghidra/Rizin、Capstone、Unicorn 和 YARA
   - 报告拆分为固证报告、逆向报告和技术附录；动态测试在 v6.x 仅保留接口契约
+- [x] Linux Loader 0.1.0
+  - 面向 WSL2 的 Linux 服务器检材只读挂载与基础取证盘点
+  - 支持 raw/dd/img 与 E01 流程设计；E01 依赖 ewf-tools/FUSE，不满足时提供 ewfexport 降级提示
+  - 默认询问哈希策略，支持先挂载后补算，避免大镜像阻塞
+  - 以本地模型低 token 开销为硬约束，脚本输出摘要 JSON，reference 按命中最小读取
+  - 覆盖 BT/aaPanel、1Panel、Docker、网站、数据库、日志、LVM/LUKS 识别和非系统数据盘场景
+  - 已提供 `inspect_evidence.py`、`mount_evidence.py`、reference 路由文档和契约测试
+  - 已通过 skill frontmatter 校验、脚本编译、CLI help 与 12 项单元测试
 - [ ] 舆情分析
 
 尽可能以更优（各种奇怪渠道？）的方式不断完善实现
