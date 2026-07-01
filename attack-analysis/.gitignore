@@ -1,0 +1,16 @@
+# Local/private incident samples used while developing the skill.
+*.log
+*.log.gz
+*.xlsx
+.DS_Store
+系统操作、登录记录/
+趣工宝运营后台/
+output/
+cache/
+__pycache__/
+*.pyc
+!tests/fixtures/**/*.log
+!tests/fixtures/**/*.txt
+!tests/fixtures/**/*.json
+!tests/fixtures/**/*.md
+!tests/fixtures/**/*.xlsx

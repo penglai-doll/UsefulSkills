@@ -1,0 +1,4 @@
+interface:
+  display_name: "Attack Analysis"
+  short_description: "Reconstruct server attacks from logs."
+  default_prompt: "Use $attack-analysis to reconstruct an attack timeline from server logs and write a Markdown incident report."

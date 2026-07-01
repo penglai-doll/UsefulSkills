@@ -25,6 +25,14 @@
   - 覆盖 BT/aaPanel、1Panel、Docker、网站、数据库、日志、LVM/LUKS 识别和非系统数据盘场景
   - 已提供 `inspect_evidence.py`、`mount_evidence.py`、reference 路由文档和契约测试
   - 已通过 skill frontmatter 校验、脚本编译、CLI help 与 12 项单元测试
+- [x] Attack Analysis 0.1.0
+  - 面向服务器被攻击后的日志溯源分析，覆盖 Web access、Spring Boot/P6Spy、登录/操作表格等 v1 已验证输入
+  - 工作前必须先确认 `quick-report` 或 `interactive`，避免应急场景下误跑、漏跑或过度分析
+  - 默认联网辅助 IP/ASN/运营商/定位等公开情报，联网失败自动降级离线；不默认上传完整日志或敏感字段
+  - 采用 AI 主导、脚本辅助：脚本负责日志清单、解析、候选事件与基础关联，AI 负责证据取舍和攻击链还原
+  - 明确区分 v1 verified、best-effort 与 future interface，不把 Windows/cloud/K8s/binlog 深解析伪装成已支持能力
+  - 已提供 parser 插件架构、跨日志关联候选、金标准攻击样本和契约测试
+  - 已通过 skill frontmatter 校验、脚本编译、真实样本 quick-report 流程测试与 5 项单元测试
 - [ ] 舆情分析
 
 尽可能以更优（各种奇怪渠道？）的方式不断完善实现
