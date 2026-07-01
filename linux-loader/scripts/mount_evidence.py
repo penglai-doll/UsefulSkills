@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -136,6 +137,73 @@ def run_command_with_input(args: list[str], input_text: str, timeout: int = 60) 
     }
 
 
+def sudo_user_choices() -> list[dict[str, str]]:
+    return [
+        {
+            "id": "manual_sudo",
+            "label": "手动提供 sudo 权限",
+            "description": "复制 manual_command 到可信 WSL 终端执行。",
+        },
+        {
+            "id": "interactive_sudo",
+            "label": "交互输入 sudo 密码",
+            "description": "在可信 WSL 终端运行同一条 sudo 命令并输入密码。",
+        },
+    ]
+
+
+def build_privilege_context() -> dict[str, Any]:
+    is_root = bool(hasattr(os, "geteuid") and os.geteuid() == 0)
+    sudo_path = shutil.which("sudo")
+    if is_root:
+        return {
+            "is_root": True,
+            "sudo_available": bool(sudo_path),
+            "sudo_noninteractive": True,
+            "can_run_privileged": True,
+            "prefix": [],
+            "manual_prefix": [],
+            "reason": None,
+            "user_choices": [],
+        }
+
+    if not sudo_path:
+        return {
+            "is_root": False,
+            "sudo_available": False,
+            "sudo_noninteractive": False,
+            "can_run_privileged": False,
+            "prefix": [],
+            "manual_prefix": ["sudo"],
+            "reason": "sudo permission required but sudo is not installed or not in PATH",
+            "user_choices": sudo_user_choices(),
+        }
+
+    sudo_noninteractive = run_command(["sudo", "-n", "true"], timeout=3)["returncode"] == 0
+    if sudo_noninteractive:
+        return {
+            "is_root": False,
+            "sudo_available": True,
+            "sudo_noninteractive": True,
+            "can_run_privileged": True,
+            "prefix": ["sudo", "-n"],
+            "manual_prefix": ["sudo"],
+            "reason": None,
+            "user_choices": [],
+        }
+
+    return {
+        "is_root": False,
+        "sudo_available": True,
+        "sudo_noninteractive": False,
+        "can_run_privileged": False,
+        "prefix": [],
+        "manual_prefix": ["sudo"],
+        "reason": "sudo permission required: current session cannot use non-interactive sudo",
+        "user_choices": sudo_user_choices(),
+    }
+
+
 def sudo_prefix() -> list[str]:
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         return []
@@ -152,7 +220,7 @@ def active_mounts() -> list[str]:
     return []
 
 
-def probe_loop_support() -> dict[str, Any]:
+def probe_loop_support(privilege: dict[str, Any] | None = None) -> dict[str, Any]:
     result = {
         "loop_attach": "unknown",
         "losetup_partition_scan": "unknown",
@@ -165,10 +233,11 @@ def probe_loop_support() -> dict[str, Any]:
     if not shutil.which("losetup"):
         result["reason"] = "losetup not found"
         return result
-    prefix = sudo_prefix()
-    if not prefix and (not hasattr(os, "geteuid") or os.geteuid() != 0):
-        result["reason"] = "non-interactive sudo unavailable"
+    privilege = privilege or build_privilege_context()
+    if not privilege.get("can_run_privileged"):
+        result["reason"] = privilege.get("reason") or "privileged loop attach unavailable"
         return result
+    prefix = list(privilege.get("prefix") or [])
     with tempfile.TemporaryDirectory(prefix="linux-loader-loop-") as td:
         img = Path(td) / "known-good.img"
         try:
@@ -235,9 +304,153 @@ def load_inspection(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
-def plan_mounts(inspect_result: dict[str, Any], selected_mount_root: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def command_entry(
+    stage: str,
+    command: list[str],
+    description: str,
+    *,
+    requires_privilege: bool = False,
+    privilege: dict[str, Any] | None = None,
+    blocked: bool = False,
+    block_reason: str | None = None,
+    requires_user_confirmation: bool = False,
+) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "stage": stage,
+        "command": command,
+        "description": description,
+        "requires_privilege": requires_privilege,
+        "blocked": blocked,
+    }
+    if requires_privilege:
+        privilege = privilege or build_privilege_context()
+        if privilege.get("can_run_privileged") and not blocked and not requires_user_confirmation:
+            entry["command"] = list(privilege.get("prefix") or []) + command
+        else:
+            entry["blocked"] = True
+            if requires_user_confirmation:
+                entry["block_reason"] = block_reason or "requires explicit user confirmation before running"
+            else:
+                entry["block_reason"] = block_reason or privilege.get("reason") or "privileged execution unavailable"
+            manual_prefix = list(privilege.get("manual_prefix") or [])
+            entry["manual_command"] = manual_prefix + command if manual_prefix else command
+            if (not privilege.get("can_run_privileged")) and privilege.get("user_choices"):
+                entry["user_choices"] = privilege["user_choices"]
+                entry["user_message"] = "当前会话没有可用 sudo 权限；请选择手动执行 manual_command，或在可信 WSL 终端交互输入 sudo 密码。"
+            elif requires_user_confirmation:
+                entry["user_message"] = "该命令涉及依赖安装或取证环境变更；需要用户确认后再执行。"
+    elif block_reason:
+        entry["block_reason"] = block_reason
+    if requires_user_confirmation:
+        entry["requires_user_confirmation"] = True
+        entry["blocked"] = True
+        entry.setdefault("block_reason", "requires explicit user confirmation before running")
+    return entry
+
+
+def fuse_user_choices(ewfmount_command: list[str], export_command: list[str]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "retry_fuse_with_sudo",
+            "label": "提权或修复 FUSE 后重试",
+            "description": "在可信 WSL 终端检查 /dev/fuse 权限，必要时用 sudo 重试 ewfmount。",
+            "manual_command": ["sudo"] + ewfmount_command,
+        },
+        {
+            "id": "export_raw",
+            "label": "使用 ewfexport 降级导出 raw",
+            "description": "确认磁盘空间和耗时后，用 ewfexport 导出 raw 再继续挂载。",
+            "manual_command": export_command,
+        },
+    ]
+
+
+def missing_ewftools(inspect_result: dict[str, Any]) -> list[str]:
+    tools = inspect_result.get("tools") or {}
+    missing = []
+    for name in ("ewfmount",):
+        if not (tools.get(name) or {}).get("available"):
+            missing.append(name)
+    return missing
+
+
+def _safe_cache_case_id(inspect_result: dict[str, Any]) -> str:
+    raw = str(inspect_result.get("case_id") or "case")
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in raw).strip(".-")
+    return safe[:80] or "case"
+
+
+def default_ewftools_cache_dir(inspect_result: dict[str, Any]) -> Path:
+    return Path(tempfile.gettempdir()).resolve() / "linux-loader-cache" / _safe_cache_case_id(inspect_result) / "ewf-tools"
+
+
+def result_tool_available(inspect_result: dict[str, Any], name: str) -> bool:
+    return bool(((inspect_result.get("tools") or {}).get(name) or {}).get("available"))
+
+
+def portable_ewftools_choice(inspect_result: dict[str, Any], cache_dir: Path | None = None) -> dict[str, Any]:
+    cache = (cache_dir or default_ewftools_cache_dir(inspect_result)).expanduser().resolve()
+    downloads = cache / "downloads"
+    root = cache / "root"
+    download_tool = "wget" if result_tool_available(inspect_result, "wget") else None
+    if not download_tool and result_tool_available(inspect_result, "curl"):
+        download_tool = "curl"
+
+    q_downloads = shlex.quote(str(downloads))
+    q_root = shlex.quote(str(root))
+    commands = [
+        f"mkdir -p {q_downloads} {q_root}",
+        ': "${LINUX_LOADER_EWFTOOLS_URLS:?set trusted ewf-tools .deb or tarball URL(s)}"',
+    ]
+    if download_tool == "wget":
+        commands.append(f'for url in $LINUX_LOADER_EWFTOOLS_URLS; do wget -P {q_downloads} "$url"; done')
+    elif download_tool == "curl":
+        commands.append(f'for url in $LINUX_LOADER_EWFTOOLS_URLS; do curl -L -O --output-dir {q_downloads} "$url"; done')
+    else:
+        commands.append(f"echo 'wget/curl missing; download ewf-tools archives into {q_downloads} manually'")
+    if result_tool_available(inspect_result, "dpkg-deb"):
+        commands.append(f"for pkg in {q_downloads}/*.deb; do [ -e \"$pkg\" ] && dpkg-deb -x \"$pkg\" {q_root}; done")
+    if result_tool_available(inspect_result, "tar"):
+        commands.append(f"for arc in {q_downloads}/*.tar*; do [ -e \"$arc\" ] && tar -xf \"$arc\" -C {q_root}; done")
+    commands.append(f"find {q_root} -type f \\( -name 'ewfmount' -o -name 'ewfexport' -o -name 'ewfinfo' \\) -print")
+
+    return {
+        "id": "download_portable_ewftools",
+        "label": "无 sudo 下载便携 ewf-tools",
+        "description": "apt 或 sudo 不可用时，用 wget/curl 将用户确认的 ewf-tools 包下载到临时缓存并解压使用。",
+        "cache_dir": str(cache),
+        "requires_sudo": False,
+        "manual_command": ["sh", "-lc", " && ".join(commands)],
+    }
+
+
+def attach_portable_ewftools_choice(entry: dict[str, Any], inspect_result: dict[str, Any], privilege: dict[str, Any]) -> None:
+    apt_available = result_tool_available(inspect_result, "apt-get")
+    if apt_available and privilege.get("can_run_privileged"):
+        return
+    choices = list(entry.get("user_choices") or [])
+    if not any(choice.get("id") == "download_portable_ewftools" for choice in choices):
+        choices.append(portable_ewftools_choice(inspect_result))
+    entry["user_choices"] = choices
+
+
+def fuse_usable_for_ewfmount(inspect_result: dict[str, Any]) -> tuple[bool, str | None]:
+    fuse = (inspect_result.get("preflight") or {}).get("fuse") or {}
+    if "usable" in fuse:
+        return bool(fuse.get("usable")), fuse.get("reason")
+    if fuse.get("dev_fuse") and fuse.get("fusermount"):
+        return True, None
+    return False, fuse.get("reason") or "FUSE is unavailable or not writable by current user"
+
+
+def plan_mounts(
+    inspect_result: dict[str, Any],
+    selected_mount_root: str,
+    privilege: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     commands: list[dict[str, Any]] = []
     mounts: list[dict[str, Any]] = []
+    privilege = privilege or build_privilege_context()
     evidence = inspect_result.get("evidence_file") or {}
     image_path = evidence.get("path")
     format_kind = (inspect_result.get("format") or {}).get("kind") or evidence.get("detected_format")
@@ -259,13 +472,87 @@ def plan_mounts(inspect_result: dict[str, Any], selected_mount_root: str) -> tup
         return commands, mounts
 
     if format_kind == "E01":
+        fuse_usable, fuse_reason = fuse_usable_for_ewfmount(inspect_result)
+        ewfexport_available = ((inspect_result.get("tools") or {}).get("ewfexport") or {}).get("available")
+        missing_tools = missing_ewftools(inspect_result)
+        if fuse_usable and missing_tools:
+            commands.append(
+                command_entry(
+                    "dependency",
+                    ["apt-get", "install", "-y", "ewf-tools"],
+                    f"install ewf-tools before E01 mounting; missing: {', '.join(missing_tools)}",
+                    requires_privilege=True,
+                    privilege=privilege,
+                    blocked=True,
+                    block_reason=f"ewf-tools required for E01 handling; missing: {', '.join(missing_tools)}",
+                    requires_user_confirmation=True,
+                )
+            )
+            attach_portable_ewftools_choice(commands[-1], inspect_result, privilege)
+            return commands, mounts
+        if not fuse_usable:
+            if missing_tools and not ewfexport_available:
+                commands.append(
+                    command_entry(
+                        "dependency",
+                        ["apt-get", "install", "-y", "ewf-tools"],
+                        f"install ewf-tools before E01 fallback; missing: {', '.join(missing_tools)}",
+                        requires_privilege=True,
+                        privilege=privilege,
+                        blocked=True,
+                        block_reason=(
+                            f"ewf-tools required for E01 handling; missing: {', '.join(missing_tools)}; "
+                            f"FUSE also unavailable: {fuse_reason}"
+                        ),
+                        requires_user_confirmation=True,
+                    )
+                )
+                attach_portable_ewftools_choice(commands[-1], inspect_result, privilege)
+                return commands, mounts
+            export_path = str(root / "ewf-export.raw")
+            ewf_dir = str(root / "ewf")
+            ewfmount_command = ["ewfmount", str(image_path), ewf_dir]
+            export_command = ["ewfexport", "-t", export_path, str(image_path)]
+            if ewfexport_available:
+                commands.append(
+                    command_entry(
+                        "expose-image",
+                        export_command,
+                        "export E01 to raw because ewfmount/FUSE is unavailable",
+                        blocked=True,
+                        block_reason=f"{fuse_reason}; choose FUSE privilege retry or raw export fallback",
+                        requires_user_confirmation=True,
+                    )
+                )
+                commands[-1]["user_choices"] = fuse_user_choices(ewfmount_command, export_command)
+            else:
+                commands.append(
+                    {
+                        "stage": "expose-image",
+                        "command": [],
+                        "description": "cannot expose E01 because FUSE is unavailable and ewfexport is missing",
+                        "blocked": True,
+                        "block_reason": fuse_reason or "FUSE unavailable and ewfexport missing",
+                        "user_choices": [
+                            {
+                                "id": "retry_fuse_with_sudo",
+                                "label": "提权或修复 FUSE 后重试",
+                                "description": "在可信 WSL 终端检查 /dev/fuse 权限后再重试 ewfmount。",
+                                "manual_command": ["sudo"] + ewfmount_command,
+                            }
+                        ],
+                    }
+                )
+            return commands, mounts
         ewf_dir = str(root / "ewf")
         commands.append(
-            {
-                "stage": "expose-image",
-                "command": ["mkdir", "-p", ewf_dir],
-                "description": "create EWF expose directory",
-            }
+            command_entry(
+                "expose-image",
+                ["mkdir", "-p", ewf_dir],
+                "create EWF expose directory",
+                requires_privilege=str(Path(ewf_dir)).startswith("/mnt/"),
+                privilege=privilege,
+            )
         )
         commands.append(
             {
@@ -281,12 +568,15 @@ def plan_mounts(inspect_result: dict[str, Any], selected_mount_root: str) -> tup
         mount_path = str(root / "whole-image")
         options = ["ro", "loop"]
         commands.append(
-            {
-                "stage": "mount-read-only",
-                "command": sudo_prefix() + ["mount", "-o", ",".join(options), str(image_path), mount_path],
-                "description": "mount whole image read-only when no partition table is available",
-            }
+            command_entry(
+                "mount-read-only",
+                ["mount", "-o", ",".join(options), str(image_path), mount_path],
+                "mount whole image read-only when no partition table is available",
+                requires_privilege=True,
+                privilege=privilege,
+            )
         )
+        blocked = bool(commands[-1].get("blocked"))
         mounts.append(
             {
                 "partition_id": "whole-image",
@@ -294,7 +584,9 @@ def plan_mounts(inspect_result: dict[str, Any], selected_mount_root: str) -> tup
                 "filesystem": "unknown",
                 "options": options,
                 "readonly": True,
-                "success": None,
+                "success": False if blocked else None,
+                "blocked": blocked,
+                "error": commands[-1].get("block_reason") if blocked else None,
                 "cleanup_command": f"umount {mount_path}",
             }
         )
@@ -307,12 +599,15 @@ def plan_mounts(inspect_result: dict[str, Any], selected_mount_root: str) -> tup
         if part.get("start_offset") is not None:
             options = options + ["loop", f"offset={part['start_offset']}"]
         commands.append(
-            {
-                "stage": "mount-read-only",
-                "command": sudo_prefix() + ["mount", "-o", ",".join(options), str(image_path), mount_path],
-                "description": f"mount partition {number} read-only",
-            }
+            command_entry(
+                "mount-read-only",
+                ["mount", "-o", ",".join(options), str(image_path), mount_path],
+                f"mount partition {number} read-only",
+                requires_privilege=True,
+                privilege=privilege,
+            )
         )
+        blocked = bool(commands[-1].get("blocked"))
         mounts.append(
             {
                 "partition_id": f"p{number}",
@@ -320,7 +615,9 @@ def plan_mounts(inspect_result: dict[str, Any], selected_mount_root: str) -> tup
                 "filesystem": part.get("filesystem") or "unknown",
                 "options": options,
                 "readonly": True,
-                "success": None,
+                "success": False if blocked else None,
+                "blocked": blocked,
+                "error": commands[-1].get("block_reason") if blocked else None,
                 "cleanup_command": f"umount {mount_path}",
                 "source_partition": part,
             }
@@ -330,14 +627,26 @@ def plan_mounts(inspect_result: dict[str, Any], selected_mount_root: str) -> tup
 
 def execute_plan(commands: list[dict[str, Any]], mounts: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     for mount in mounts:
+        if mount.get("blocked"):
+            continue
         mount_path = mount.get("mount_path")
         if mount_path and mount.get("success") is None:
             try:
                 Path(mount_path).mkdir(parents=True, exist_ok=True)
             except OSError as exc:
-                mount["success"] = False
-                mount["error"] = str(exc)
+                mkdir_cmd = sudo_prefix() + ["mkdir", "-p", str(mount_path)]
+                if mkdir_cmd and mkdir_cmd[0] == "sudo":
+                    mkdir_result = run_command(mkdir_cmd, timeout=30)
+                    if mkdir_result["returncode"] != 0:
+                        mount["success"] = False
+                        mount["error"] = mkdir_result["stderr"] or mkdir_result["stdout"] or str(exc)
+                else:
+                    mount["success"] = False
+                    mount["error"] = str(exc)
     for command in commands:
+        if command.get("blocked"):
+            command["result"] = {"returncode": None, "stderr": command.get("block_reason"), "stdout": ""}
+            continue
         args = command.get("command") or []
         if not args:
             continue
@@ -432,9 +741,10 @@ def main(argv: list[str] | None = None) -> int:
     output_dir = Path(args.output_dir).expanduser().resolve() / case_id
     selected = select_mount_root(Path(args.mount_root) / case_id, case_id)
     selected_mount_root = selected["selected"]
-    commands, mounts = plan_mounts(inspect_result, selected_mount_root)
+    privilege = build_privilege_context()
+    commands, mounts = plan_mounts(inspect_result, selected_mount_root, privilege=privilege)
 
-    loop_probe = probe_loop_support()
+    loop_probe = probe_loop_support(privilege)
     hash_policy = inspect_helpers.parse_hash_policy(args.hash)
     if not args.dry_run:
         commands, mounts = execute_plan(commands, mounts)
@@ -455,7 +765,7 @@ def main(argv: list[str] | None = None) -> int:
             "alternate_path_reason": selected["alternate_reason"],
         },
         "tools": inspect_result.get("tools") or {},
-        "preflight": {**(inspect_result.get("preflight") or {}), **loop_probe},
+        "preflight": {**(inspect_result.get("preflight") or {}), **loop_probe, "privilege": privilege},
         "format": inspect_result.get("format") or {},
         "ewf": inspect_result.get("ewf") or {},
         "partitions": inspect_result.get("partitions") or {"items": [], "errors": []},
@@ -468,7 +778,11 @@ def main(argv: list[str] | None = None) -> int:
         "panels": inspect_result.get("panels") or {},
         "docker": inspect_result.get("docker") or {},
         "routes": inspect_result.get("routes") or {"recommended_references": [], "suggested_next_steps": []},
-        "errors": [],
+        "errors": [
+            {"fatal": False, "message": cmd.get("block_reason"), "stage": cmd.get("stage")}
+            for cmd in commands
+            if cmd.get("blocked") and cmd.get("block_reason")
+        ],
     }
     output_files["mount_json"] = write_json(output_dir / "mount.json", result)
     output_files["inspect_json"] = write_json(output_dir / "inspect.json", inspect_result)
@@ -479,6 +793,10 @@ def main(argv: list[str] | None = None) -> int:
     write_json(output_dir / "mount.json", result)
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.dry_run:
+        return 0
+    if any(cmd.get("blocked") for cmd in commands):
+        return 1
     return 1 if any(item.get("success") is False for item in mounts) else 0
 
 

@@ -17,14 +17,12 @@
   - ZIP fallback、符号链接、超大文本和 Native strings 均采用有界扫描；专用 provider 仅提交命中规则的 `styles.xml/info` 密文
   - Native 深挖仅对证据选中的 SO 调用 Ghidra/Rizin、Capstone、Unicorn 和 YARA
   - 报告拆分为固证报告、逆向报告和技术附录；动态测试在 v6.x 仅保留接口契约
-- [x] Linux Loader 0.1.0
-  - 面向 WSL2 的 Linux 服务器检材只读挂载与基础取证盘点
-  - 支持 raw/dd/img 与 E01 流程设计；E01 依赖 ewf-tools/FUSE，不满足时提供 ewfexport 降级提示
-  - 默认询问哈希策略，支持先挂载后补算，避免大镜像阻塞
-  - 以本地模型低 token 开销为硬约束，脚本输出摘要 JSON，reference 按命中最小读取
-  - 覆盖 BT/aaPanel、1Panel、Docker、网站、数据库、日志、LVM/LUKS 识别和非系统数据盘场景
-  - 已提供 `inspect_evidence.py`、`mount_evidence.py`、reference 路由文档和契约测试
-  - 已通过 skill frontmatter 校验、脚本编译、CLI help 与 12 项单元测试
+- [x] Linux Loader v1.0.0
+  - 面向 WSL2/Linux 的 Linux 检材只读挂载、基础盘点和按需分析
+  - 支持 raw/dd/img 与 E01；E01 缺 `ewf-tools` 时可提示 apt 安装或 wget/curl 下载到临时缓存，FUSE 不可用时提示提权或 `ewfexport` 降级
+  - 自动试探 sudo；无可用 sudo 时输出 `manual_command` 和用户选择，不增加额外模式
+  - 本地模型友好：摘要 JSON、最小 reference 读取，重点覆盖 Docker 挂载映射、常见面板、网站、数据库和日志
+  - 已覆盖 WSL2 权限/FUSE、哈希策略、非系统数据盘、LVM/LUKS、文件系统只读参数和路由契约测试
 - [x] Attack Analysis 0.1.0
   - 面向服务器被攻击后的日志溯源分析，覆盖 Web access、Spring Boot/P6Spy、登录/操作表格等 v1 已验证输入
   - 工作前必须先确认 `quick-report` 或 `interactive`，避免应急场景下误跑、漏跑或过度分析

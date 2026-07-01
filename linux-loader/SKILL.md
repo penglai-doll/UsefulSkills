@@ -3,7 +3,7 @@ name: linux-loader
 description: Use when Codex needs to mount, inspect, triage, or perform focused forensic recovery from Linux server disk evidence images in WSL2 or Linux, including raw/dd/img and E01 evidence, BT/aaPanel or 1Panel recovery, website/database/log recovery, Docker volume and bind-mount analysis, or read-only baseline evidence reconnaissance.
 ---
 
-# Linux Loader
+# Linux Loader v1.0.0
 
 AI-led, script-assisted Linux evidence mounting and triage. Use local tools first, keep evidence read-only, keep context small for local models, and load detailed references only when routing or the user goal requires them.
 
@@ -31,7 +31,7 @@ route-references -> optional-focused-analysis -> optional-deferred-hash ->
 cleanup-guidance
 ```
 
-- `preflight`: validate path/readability, WSL2 context, sudo status, absolute output path, mount-root conflict, loop probe, `losetup -P` probe, FUSE probe, and resume state.
+- `preflight`: validate path/readability, WSL2 context, automatic sudo probe, absolute output path, mount-root conflict, loop probe, `losetup -P` probe, FUSE permission probe, and resume state.
 - `hash-decision`: record `now`, `later`, or `skip`; never compute hashes without user choice.
 - `expose-image`: use raw/dd/img directly; for E01 prefer `ewfmount` only when FUSE works, otherwise offer `ewfexport` with size/time/free-space estimates.
 - `mount-read-only`: select filesystem-specific read-only options; do not repair filesystems.
@@ -54,6 +54,9 @@ Required script behavior:
 - `mount_evidence.py` also supports `--dry-run`, `--inspect-json`, `--resume`, and `--triage-level full|fast`.
 - Write outputs outside mounted evidence under an absolute `output/linux-loader/<case-id>/` path by default.
 - Use `/mnt/evidence_mount/<case-id>/` only for read-only mount targets unless preflight detects a conflict, then choose a case-specific alternate.
+- Privilege handling is automatic: try root, then `sudo -n true`. If unavailable, emit `blocked=true`, `manual_command`, and `user_choices` (`manual_sudo`, `interactive_sudo`); do not add a user-facing sudo mode or try a bare privileged `mount`.
+- For E01, if `ewfmount` is missing, ask before planning `apt-get install -y ewf-tools`; if apt/sudo is unavailable, offer `download_portable_ewftools` using wget/curl into a temporary cache directory, never a system path or mounted evidence.
+- If FUSE is unavailable, do not plan `ewfmount`; ask whether to elevate/repair FUSE or use `ewfexport` raw fallback when available.
 - Keep model-facing JSON compact. Do not include full logs, full recursive listings, full Docker metadata, complete histories, secrets, or large file contents.
 - Capped lists must include `total_count`, `shown_count`, `truncated`, and optional `details_path`.
 
@@ -79,5 +82,6 @@ Read [validation.md](./references/validation.md) before changing scripts or publ
 
 - Prefer local built-in tools: `file`, `stat`, `fdisk`, `parted`, `blkid`, `mount`, `findmnt`, `lsblk`, `losetup`, `md5sum`, `sha1sum`, and `sha256sum`.
 - Ask before installing third-party tools. E01 normally needs `ewf-tools`; FUSE may be required for `ewfmount`.
+- Treat FUSE as usable only when `/dev/fuse` exists, is readable/writable by the current user, and `fusermount` or `fusermount3` exists; otherwise prefer user-approved `ewfexport`.
 - Recognize LVM/LUKS and provide manual read-only continuation guidance, but do not auto-activate LVM, unlock LUKS, assemble RAID, run `fsck`, or write to evidence.
 - Separate confirmed evidence facts, path-based inferences, and next-step suggestions.

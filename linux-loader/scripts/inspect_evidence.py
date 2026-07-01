@@ -21,7 +21,22 @@ HASH_ALGORITHMS = ("md5", "sha1", "sha256")
 DEFAULT_MOUNT_ROOT = "/mnt/evidence_mount"
 BUILTIN_TOOLS = ("file", "stat", "fdisk", "parted", "blkid", "mount", "findmnt", "lsblk", "losetup")
 HASH_TOOLS = ("md5sum", "sha1sum", "sha256sum")
-OPTIONAL_TOOLS = ("ewfinfo", "ewfmount", "ewfexport", "fusermount", "fusermount3", "pvs", "vgs", "lvs", "cryptsetup")
+OPTIONAL_TOOLS = (
+    "ewfinfo",
+    "ewfmount",
+    "ewfexport",
+    "fusermount",
+    "fusermount3",
+    "apt-get",
+    "wget",
+    "curl",
+    "dpkg-deb",
+    "tar",
+    "pvs",
+    "vgs",
+    "lvs",
+    "cryptsetup",
+)
 
 
 def parse_hash_policy(value: str | None) -> dict[str, Any]:
@@ -153,7 +168,7 @@ def tool_inventory(format_kind: str | None = None) -> dict[str, Any]:
             required = False
         if name in OPTIONAL_TOOLS:
             category = "optional"
-            required = format_kind == "E01" and name in {"ewfinfo", "ewfmount"}
+            required = format_kind == "E01" and name == "ewfmount"
         tools[name] = {"available": bool(path), "path": path, "category": category, "required": required}
     return tools
 
@@ -179,12 +194,36 @@ def preflight_snapshot(format_kind: str | None = None) -> dict[str, Any]:
         "sudo_noninteractive": sudo_noninteractive,
         "loop_attach_probe": "unknown" if not sudo_noninteractive else "not_run_by_inspect",
         "losetup_partition_scan": "unknown" if not sudo_noninteractive else "not_run_by_inspect",
-        "fuse": {
-            "dev_fuse": Path("/dev/fuse").exists(),
-            "fusermount": bool(shutil.which("fusermount") or shutil.which("fusermount3")),
-        },
+        "fuse": fuse_snapshot(),
         "resume_state": "not_requested",
         "format_context": format_kind,
+    }
+
+
+def fuse_snapshot(dev_fuse: Path | None = None) -> dict[str, Any]:
+    dev = dev_fuse or Path("/dev/fuse")
+    fusermount = shutil.which("fusermount") or shutil.which("fusermount3")
+    exists = dev.exists()
+    readable = os.access(dev, os.R_OK) if exists else False
+    writable = os.access(dev, os.W_OK) if exists else False
+    reasons = []
+    if not exists:
+        reasons.append("/dev/fuse is missing")
+    if exists and not readable:
+        reasons.append("/dev/fuse is not readable by current user")
+    if exists and not writable:
+        reasons.append("/dev/fuse is not writable by current user")
+    if not fusermount:
+        reasons.append("fusermount/fusermount3 is missing")
+    usable = exists and readable and writable and bool(fusermount)
+    return {
+        "dev_fuse": exists,
+        "dev_fuse_readable": readable,
+        "dev_fuse_writable": writable,
+        "fusermount": bool(fusermount),
+        "fusermount_path": fusermount,
+        "usable": usable,
+        "reason": "; ".join(reasons) if reasons else None,
     }
 
 
@@ -193,7 +232,8 @@ def detect_format(path: Path) -> dict[str, Any]:
         return {"kind": "mounted-tree", "confidence": 1.0, "evidence": ["path is a directory"]}
     suffix = path.suffix.lower()
     try:
-        magic = path.open("rb").read(16)
+        with path.open("rb") as fh:
+            magic = fh.read(16)
     except OSError:
         magic = b""
     evidence = []
@@ -248,9 +288,10 @@ def ewf_snapshot(path: Path, format_info: dict[str, Any], output_abs: Path) -> d
         result["metadata"] = {"ewfinfo_excerpt": info["stdout"][:2000], "returncode": info["returncode"]}
     else:
         result["errors"].append({"tool": "ewfinfo", "message": "ewfinfo is missing; ask before installing ewf-tools"})
-    if not Path("/dev/fuse").exists():
+    fuse = fuse_snapshot()
+    if not fuse["usable"]:
         result["fallback"] = "ewfexport"
-        result["errors"].append({"tool": "fuse", "message": "/dev/fuse is unavailable; ewfmount may not work in this WSL/Linux environment"})
+        result["errors"].append({"tool": "fuse", "message": f"ewfmount unavailable: {fuse['reason']}"})
     return result
 
 
