@@ -19,3 +19,6 @@ output*/
 # Tiny synthetic archives are versioned only as deterministic test fixtures.
 !android-malware-analysis/tests/fixtures/archives/*.apk
 !android-malware-analysis/tests/fixtures/archives/*.apks
+
+# Local planning/spec scratch files should not be published.
+/docs/superpowers/specs/
