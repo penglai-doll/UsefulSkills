@@ -1,0 +1,3 @@
+2026-04-15 10:01:12.100  INFO 123 --- [http-nio-8080-exec-1] com.example.LoginController:88 - username=admin ip=198.51.100.23 login failed
+2026-04-15 10:02:30.500 ERROR 123 --- [http-nio-8080-exec-2] com.example.ApiController:54 - SQL syntax exception for ip=198.51.100.23 path=/api/user
+2026-04-15 10:03:20.700 WARN 123 --- [http-nio-8080-exec-3] com.example.UploadController:77 - upload suspicious file shell.jsp ip=198.51.100.23

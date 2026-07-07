@@ -1,0 +1,9 @@
+{
+  "attacker_ip": "198.51.100.23",
+  "expected_steps": [
+    "admin path probing",
+    "failed admin login",
+    "SQL injection probe causing app and SQL errors",
+    "suspicious upload attempt"
+  ]
+}

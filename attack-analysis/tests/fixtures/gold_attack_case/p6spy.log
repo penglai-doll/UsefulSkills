@@ -1,0 +1,2 @@
+2026-04-15 10:02:30.501  INFO 123 --- [http-nio-8080-exec-2] p6spy:60 - 2026-04-15 10:02:30.501 | 耗时 5 ms | SQL 语句：SELECT * FROM users WHERE id = 1 union select password from users;
+2026-04-15 10:03:21.000  INFO 123 --- [http-nio-8080-exec-3] p6spy:60 - 2026-04-15 10:03:21.000 | 耗时 2 ms | SQL 语句：INSERT INTO upload_log(file_name, ip) VALUES('shell.jsp','198.51.100.23');

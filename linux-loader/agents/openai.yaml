@@ -1,0 +1,4 @@
+interface:
+  display_name: "Linux Loader"
+  short_description: "WSL2-first Linux evidence mounting and triage."
+  default_prompt: "Use $linux-loader to mount Linux server disk evidence read-only, collect compact baseline triage, and route focused recovery or forensic analysis with minimum reference loading."
