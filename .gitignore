@@ -1,3 +1,16 @@
 .DS_Store
 __pycache__/
 *.pyc
+android-malware-analysis/**/__pycache__/
+
+# Keep this repository focused on skill bodies. Top-level working folders,
+# generated reports, and local agent state should not be committed.
+/.claude/
+.claude/worktrees/
+/docs/
+output*/
+
+# Local malware samples must stay outside GitHub history.
+*.apk
+*.apks
+*.xapk
