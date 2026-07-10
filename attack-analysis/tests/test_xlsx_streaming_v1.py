@@ -17,6 +17,20 @@ SHEET_XML = """<?xml version="1.0" encoding="UTF-8"?>
   </sheetData>
 </worksheet>"""
 
+IMPLICIT_CELL_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1"><c t="inlineStr"><is><t>A-value</t></is></c><c t="inlineStr"><is><t>B-value</t></is></c><c r="D1" t="inlineStr"><is><t>D-value</t></is></c><c t="inlineStr"><is><t>E-value</t></is></c></row>
+  </sheetData>
+</worksheet>"""
+
+SECOND_SHEET_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1"><c r="A1" t="inlineStr"><is><t>sheet-two</t></is></c></row>
+  </sheetData>
+</worksheet>"""
+
 
 class XlsxStreamingV1Tests(unittest.TestCase):
     def test_iter_rows_streams_and_preserves_sparse_columns(self):
@@ -29,6 +43,27 @@ class XlsxStreamingV1Tests(unittest.TestCase):
             self.assertEqual(rows[0][1], ["USER", "", "IP"])
             self.assertEqual(rows[1][1], ["alice", "", "198.51.100.23"])
             self.assertEqual(len(list(iter_rows(path, max_rows=1))), 1)
+
+    def test_iter_rows_advances_cursor_for_cells_without_references(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "implicit-cells.xlsx"
+            with ZipFile(path, "w") as zf:
+                zf.writestr("xl/worksheets/sheet1.xml", IMPLICIT_CELL_XML)
+
+            self.assertEqual(
+                list(iter_rows(path)),
+                [(1, ["A-value", "B-value", "", "D-value", "E-value"])],
+            )
+
+    def test_iter_rows_selects_sheet_index_and_handles_out_of_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "multiple-sheets.xlsx"
+            with ZipFile(path, "w") as zf:
+                zf.writestr("xl/worksheets/sheet1.xml", SHEET_XML)
+                zf.writestr("xl/worksheets/sheet2.xml", SECOND_SHEET_XML)
+
+            self.assertEqual(list(iter_rows(path, sheet_index=1)), [(1, ["sheet-two"])])
+            self.assertEqual(list(iter_rows(path, sheet_index=2)), [])
 
 
 if __name__ == "__main__":

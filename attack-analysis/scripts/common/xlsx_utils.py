@@ -61,8 +61,11 @@ def iter_rows(path: str | Path, max_rows: int | None = None, sheet_index: int = 
                     continue
                 row_number = int(elem.get("r") or emitted + 1)
                 values: list[str] = []
+                next_position = 0
                 for cell in elem.findall("a:c", NS):
-                    position = _column_index(cell.get("r") or "A1")
+                    cell_ref = cell.get("r")
+                    position = _column_index(cell_ref) if cell_ref else next_position
+                    next_position = position + 1
                     while len(values) <= position:
                         values.append("")
                     values[position] = _cell_value(cell, shared)
