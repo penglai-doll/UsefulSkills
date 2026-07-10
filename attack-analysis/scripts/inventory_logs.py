@@ -229,7 +229,7 @@ def build_manifest(args: argparse.Namespace, case_paths: CasePaths) -> dict[str,
         for path in discover(args.paths, args.include_hidden, excluded_roots)
     ]
     return {
-        "case_id": case_paths.cache_dir.name,
+        "case_id": case_paths.report_dir.name,
         "mode": args.mode,
         "default_timezone": args.default_timezone,
         "invocation_cwd": str(case_paths.workdir),

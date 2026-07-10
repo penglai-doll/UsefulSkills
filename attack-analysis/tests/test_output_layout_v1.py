@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -33,6 +34,27 @@ class OutputLayoutV1Tests(unittest.TestCase):
             prepare_case_paths(paths, allow_existing=False)
             with self.assertRaises(FileExistsError):
                 prepare_case_paths(paths, allow_existing=False)
+
+    def test_prepare_case_paths_self_ignores_outputs_in_any_git_workdir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            subprocess.run(["git", "init", "-q"], cwd=workdir, check=True)
+
+            paths = resolve_case_paths(workdir, "incident-01")
+            prepare_case_paths(paths, allow_existing=False)
+            paths.manifest_path.write_text("{}", encoding="utf-8")
+            (paths.cache_dir / "log-inventory.json").write_text("{}", encoding="utf-8")
+            paths.report_path.write_text("# report\n", encoding="utf-8")
+
+            status = subprocess.run(
+                ["git", "status", "--short", "--untracked-files=all"],
+                cwd=workdir,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            self.assertEqual(status.stdout, "")
 
     def test_default_case_id_is_safe_and_deterministic_for_fixed_time(self):
         now = datetime(2026, 7, 10, 12, 30, 45)

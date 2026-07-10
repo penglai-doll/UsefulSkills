@@ -47,6 +47,10 @@ class AttackAnalysisContractTests(unittest.TestCase):
             self.assertNotIn("output/attack-analysis/<case-id>", content)
             self.assertIn("$PWD/cache/<case-id>/", content)
             self.assertIn("$PWD/report/<case-id>/log-analysis-report.md", content)
+            self.assertIn("<skill-root>/scripts/inventory_logs.py", content)
+            self.assertIn("<skill-root>/scripts/extract_log_events.py", content)
+            self.assertIn("<skill-root>/scripts/correlate_events.py", content)
+            self.assertNotIn("python3 scripts/inventory_logs.py", content)
 
     def test_inventory_detects_verified_log_types_and_privacy_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -110,6 +114,7 @@ class AttackAnalysisContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             output_dir = tmp_path / "legacy-cache"
+            workdir = tmp_path / "workdir"
             result = run_cmd([
                 PY,
                 "scripts/inventory_logs.py",
@@ -119,13 +124,24 @@ class AttackAnalysisContractTests(unittest.TestCase):
                 "--case-id",
                 "legacy-case",
                 "--workdir",
-                str(tmp_path / "workdir"),
+                str(workdir),
                 "--output-dir",
                 str(output_dir),
             ])
 
             self.assertEqual(result.stdout, "")
-            self.assertTrue((output_dir / "analysis-manifest.json").is_file())
+            manifest_path = output_dir / "analysis-manifest.json"
+            self.assertTrue(manifest_path.is_file())
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["case_id"], "legacy-case")
+            self.assertEqual(
+                manifest["output_paths"],
+                {
+                    "cache_dir": str(output_dir.resolve()),
+                    "report_dir": str(workdir.resolve() / "report" / "legacy-case"),
+                    "report_path": str(workdir.resolve() / "report" / "legacy-case" / "log-analysis-report.md"),
+                },
+            )
 
     def test_inventory_skips_case_cache_and_report_when_workdir_is_scanned(self):
         with tempfile.TemporaryDirectory() as tmp:

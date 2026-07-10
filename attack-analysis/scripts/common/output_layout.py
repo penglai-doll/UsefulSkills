@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Sequence
 
+SELF_IGNORE_CONTENT = "*\n"
+
 
 @dataclass(frozen=True)
 class CasePaths:
@@ -49,5 +51,8 @@ def prepare_case_paths(paths: CasePaths, allow_existing: bool = False) -> None:
     exists = paths.cache_dir.exists() or paths.report_dir.exists()
     if exists and not allow_existing:
         raise FileExistsError(f"case output already exists: {paths.cache_dir.name}")
+    for root in (paths.cache_dir.parent, paths.report_dir.parent):
+        root.mkdir(parents=True, exist_ok=True)
+        (root / ".gitignore").write_text(SELF_IGNORE_CONTENT, encoding="utf-8")
     paths.cache_dir.mkdir(parents=True, exist_ok=True)
     paths.report_dir.mkdir(parents=True, exist_ok=True)

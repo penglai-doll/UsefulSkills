@@ -28,6 +28,16 @@ Use for deep investigation. Confirm before extraction:
 mode-confirmation -> paths -> inventory -> manifest -> optional-confirmation -> extraction -> correlation -> AI review -> enrichment -> report
 ```
 
+## Command Resolution
+
+Use `<skill-root>` for script locations and `$PWD` for analyst-owned outputs. The scripts live under the installed `attack-analysis/` skill directory, not under the directory being analyzed.
+
+```bash
+python3 <skill-root>/scripts/inventory_logs.py <paths...> --mode quick-report --case-id "<case-id>" --workdir "$PWD" --json
+python3 <skill-root>/scripts/extract_log_events.py --manifest "$PWD/cache/<case-id>/analysis-manifest.json" --output-dir "$PWD/cache/<case-id>/" --json
+python3 <skill-root>/scripts/correlate_events.py --events "$PWD/cache/<case-id>/event-candidates.json" --output-dir "$PWD/cache/<case-id>/" --json
+```
+
 - `mode-confirmation`: require an explicit current-turn choice of `quick-report` or `interactive`.
 - `inventory`: discover files, estimate size/line counts, detect compression, sample safely, infer log type and time range.
 - `manifest`: record mode, default time zone, per-file overrides, include flags, network status, and analysis notes.

@@ -34,10 +34,12 @@ Detailed workflow: [workflow.md](./references/workflow.md)
 
 ## Scripts
 
+Treat `<skill-root>` as the installed `attack-analysis/` directory that contains `scripts/`. Run scripts from there; keep `--workdir "$PWD"` pointed at the directory where you want case outputs written. Do not assume the analyzed log directory itself contains a `scripts/` folder.
+
 ```bash
-python3 scripts/inventory_logs.py <paths...> --mode quick-report --case-id "<case-id>" --workdir "$PWD" --json
-python3 scripts/extract_log_events.py --manifest "$PWD/cache/<case-id>/analysis-manifest.json" --output-dir "$PWD/cache/<case-id>/" --json
-python3 scripts/correlate_events.py --events "$PWD/cache/<case-id>/event-candidates.json" --output-dir "$PWD/cache/<case-id>/" --json
+python3 <skill-root>/scripts/inventory_logs.py <paths...> --mode quick-report --case-id "<case-id>" --workdir "$PWD" --json
+python3 <skill-root>/scripts/extract_log_events.py --manifest "$PWD/cache/<case-id>/analysis-manifest.json" --output-dir "$PWD/cache/<case-id>/" --json
+python3 <skill-root>/scripts/correlate_events.py --events "$PWD/cache/<case-id>/event-candidates.json" --output-dir "$PWD/cache/<case-id>/" --json
 ```
 
 Script roles:
