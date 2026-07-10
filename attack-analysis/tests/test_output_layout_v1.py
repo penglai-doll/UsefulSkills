@@ -42,6 +42,14 @@ class OutputLayoutV1Tests(unittest.TestCase):
 
             paths = resolve_case_paths(workdir, "incident-01")
             prepare_case_paths(paths, allow_existing=False)
+            cache_ignore = paths.cache_dir / ".gitignore"
+            report_ignore = paths.report_dir / ".gitignore"
+            self.assertTrue(cache_ignore.is_file(), "expected case-local cache .gitignore")
+            self.assertTrue(report_ignore.is_file(), "expected case-local report .gitignore")
+            self.assertEqual(cache_ignore.read_bytes(), b"*\n")
+            self.assertEqual(report_ignore.read_bytes(), b"*\n")
+            self.assertFalse((paths.cache_dir.parent / ".gitignore").exists())
+            self.assertFalse((paths.report_dir.parent / ".gitignore").exists())
             paths.manifest_path.write_text("{}", encoding="utf-8")
             (paths.cache_dir / "log-inventory.json").write_text("{}", encoding="utf-8")
             paths.report_path.write_text("# report\n", encoding="utf-8")
@@ -55,6 +63,21 @@ class OutputLayoutV1Tests(unittest.TestCase):
             )
 
             self.assertEqual(status.stdout, "")
+
+    def test_prepare_case_paths_preserves_existing_case_local_gitignores(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = resolve_case_paths(Path(tmp), "incident-01")
+            paths.cache_dir.mkdir(parents=True)
+            paths.report_dir.mkdir(parents=True)
+            cache_policy = b"!keep-cache.txt\n\xff\n"
+            report_policy = b"!keep-report.txt\n\x00\n"
+            (paths.cache_dir / ".gitignore").write_bytes(cache_policy)
+            (paths.report_dir / ".gitignore").write_bytes(report_policy)
+
+            prepare_case_paths(paths, allow_existing=True)
+
+            self.assertEqual((paths.cache_dir / ".gitignore").read_bytes(), cache_policy)
+            self.assertEqual((paths.report_dir / ".gitignore").read_bytes(), report_policy)
 
     def test_default_case_id_is_safe_and_deterministic_for_fixed_time(self):
         now = datetime(2026, 7, 10, 12, 30, 45)

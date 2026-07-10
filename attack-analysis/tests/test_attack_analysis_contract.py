@@ -115,6 +115,8 @@ class AttackAnalysisContractTests(unittest.TestCase):
             tmp_path = Path(tmp)
             output_dir = tmp_path / "legacy-cache"
             workdir = tmp_path / "workdir"
+            parent_policy = b"!preserve-parent-policy\n\xff\n"
+            (tmp_path / ".gitignore").write_bytes(parent_policy)
             result = run_cmd([
                 PY,
                 "scripts/inventory_logs.py",
@@ -130,6 +132,8 @@ class AttackAnalysisContractTests(unittest.TestCase):
             ])
 
             self.assertEqual(result.stdout, "")
+            self.assertEqual((tmp_path / ".gitignore").read_bytes(), parent_policy)
+            self.assertEqual((output_dir / ".gitignore").read_bytes(), b"*\n")
             manifest_path = output_dir / "analysis-manifest.json"
             self.assertTrue(manifest_path.is_file())
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
