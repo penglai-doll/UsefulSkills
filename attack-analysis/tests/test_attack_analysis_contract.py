@@ -28,19 +28,69 @@ class AttackAnalysisContractTests(unittest.TestCase):
         self.assertIn("$attack-analysis", agent)
 
     def test_inventory_detects_verified_log_types_and_privacy_contract(self):
-        result = run_cmd([PY, "scripts/inventory_logs.py", str(FIXTURE), "--mode", "quick-report", "--case-id", "gold", "--json"])
-        manifest = json.loads(result.stdout)
-        detected = {Path(f["path"]).name: f["detected_type"] for f in manifest["files"]}
-        self.assertEqual(detected["access.log"], "web_access")
-        self.assertEqual(detected["app.log"], "spring_app")
-        self.assertEqual(detected["p6spy.log"], "p6spy_sql")
-        self.assertEqual(detected["login.xlsx"], "xlsx_login")
-        self.assertEqual(detected["operate.xlsx"], "xlsx_operate")
-        self.assertEqual(manifest["network_assist"], "enabled")
-        self.assertIn("full_log", manifest["privacy"]["excluded_external_data_classes"])
-        for entry in manifest["files"]:
-            self.assertIn("timezone", entry)
-            self.assertIn("time_parse_status", entry)
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp) / "workdir"
+            result = run_cmd([
+                PY,
+                "scripts/inventory_logs.py",
+                str(FIXTURE),
+                "--mode",
+                "quick-report",
+                "--case-id",
+                "gold",
+                "--workdir",
+                str(workdir),
+                "--json",
+            ])
+            manifest = json.loads(result.stdout)
+            detected = {Path(f["path"]).name: f["detected_type"] for f in manifest["files"]}
+            self.assertEqual(detected["access.log"], "web_access")
+            self.assertEqual(detected["app.log"], "spring_app")
+            self.assertEqual(detected["p6spy.log"], "p6spy_sql")
+            self.assertEqual(detected["login.xlsx"], "xlsx_login")
+            self.assertEqual(detected["operate.xlsx"], "xlsx_operate")
+            self.assertEqual(manifest["network_assist"], "enabled")
+            self.assertIn("full_log", manifest["privacy"]["excluded_external_data_classes"])
+            resolved_workdir = workdir.resolve()
+            self.assertEqual(manifest["invocation_cwd"], str(resolved_workdir))
+            self.assertEqual(
+                manifest["output_paths"],
+                {
+                    "cache_dir": str(resolved_workdir / "cache" / "gold"),
+                    "report_dir": str(resolved_workdir / "report" / "gold"),
+                    "report_path": str(resolved_workdir / "report" / "gold" / "log-analysis-report.md"),
+                },
+            )
+            self.assertTrue((workdir / "cache" / "gold" / "analysis-manifest.json").is_file())
+            for entry in manifest["files"]:
+                self.assertIn("timezone", entry)
+                self.assertIn("time_parse_status", entry)
+
+    def test_inventory_skips_case_cache_and_report_when_workdir_is_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp) / "workdir"
+            workdir.mkdir()
+            (workdir / "input.log").write_text("2026-07-10 12:30:45 INFO request\n", encoding="utf-8")
+            (workdir / "cache").mkdir()
+            (workdir / "cache" / "old.log").write_text("cached\n", encoding="utf-8")
+            (workdir / "report").mkdir()
+            (workdir / "report" / "old.log").write_text("reported\n", encoding="utf-8")
+
+            result = run_cmd([
+                PY,
+                "scripts/inventory_logs.py",
+                str(workdir),
+                "--mode",
+                "quick-report",
+                "--case-id",
+                "gold",
+                "--workdir",
+                str(workdir),
+                "--json",
+            ])
+
+            manifest = json.loads(result.stdout)
+            self.assertEqual([Path(entry["path"]).name for entry in manifest["files"]], ["input.log"])
 
 
     def test_inventory_requires_explicit_mode(self):
@@ -57,14 +107,26 @@ class AttackAnalysisContractTests(unittest.TestCase):
     def test_extract_and_correlate_gold_attack_case(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            run_cmd([PY, "scripts/inventory_logs.py", str(FIXTURE), "--mode", "quick-report", "--case-id", "gold", "--output-dir", str(tmp_path)])
+            workdir = tmp_path / "workdir"
+            cache_dir = workdir / "cache" / "gold"
+            run_cmd([
+                PY,
+                "scripts/inventory_logs.py",
+                str(FIXTURE),
+                "--mode",
+                "quick-report",
+                "--case-id",
+                "gold",
+                "--workdir",
+                str(workdir),
+            ])
             extract = run_cmd([
                 PY,
                 "scripts/extract_log_events.py",
                 "--manifest",
-                str(tmp_path / "analysis-manifest.json"),
+                str(cache_dir / "analysis-manifest.json"),
                 "--output-dir",
-                str(tmp_path),
+                str(cache_dir),
                 "--json",
             ])
             events = json.loads(extract.stdout)
@@ -80,9 +142,9 @@ class AttackAnalysisContractTests(unittest.TestCase):
                 PY,
                 "scripts/correlate_events.py",
                 "--events",
-                str(tmp_path / "event-candidates.json"),
+                str(cache_dir / "event-candidates.json"),
                 "--output-dir",
-                str(tmp_path),
+                str(cache_dir),
                 "--json",
             ])
             correlations = json.loads(corr.stdout)["correlations"]

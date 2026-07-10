@@ -15,6 +15,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from common.io_utils import is_gzip, is_probably_text, is_xlsx, iter_text_lines, safe_relpath
+from common.output_layout import CasePaths, default_case_id, prepare_case_paths, resolve_case_paths
 from common.time_normalize import parse_timestamp
 from common.xlsx_utils import iter_rows, read_header
 
@@ -45,7 +46,13 @@ SECURITY_KEYWORDS = [
 ]
 
 
-def discover(paths: list[str], include_hidden: bool = False) -> list[Path]:
+def discover(paths: list[str], include_hidden: bool = False, excluded_roots: list[Path] | None = None) -> list[Path]:
+    resolved_excluded_roots = [root.expanduser().resolve() for root in excluded_roots or []]
+
+    def is_excluded(path: Path) -> bool:
+        resolved_path = path.resolve()
+        return any(resolved_path.is_relative_to(root) for root in resolved_excluded_roots)
+
     files: list[Path] = []
     for raw in paths:
         path = Path(raw).expanduser()
@@ -53,11 +60,13 @@ def discover(paths: list[str], include_hidden: bool = False) -> list[Path]:
             for item in sorted(path.rglob("*")):
                 if not item.is_file():
                     continue
+                if is_excluded(item):
+                    continue
                 if not include_hidden and any(part.startswith(".") for part in item.parts):
                     continue
                 files.append(item)
         elif path.is_file():
-            if include_hidden or not path.name.startswith("."):
+            if not is_excluded(path) and (include_hidden or not path.name.startswith(".")):
                 files.append(path)
     return files
 
@@ -213,13 +222,22 @@ def inventory_file(path: Path, default_timezone: str, sample_limit: int) -> dict
     return base
 
 
-def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
-    files = [inventory_file(path, args.default_timezone, args.sample_limit) for path in discover(args.paths, args.include_hidden)]
-    case_id = args.case_id or f"case-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+def build_manifest(args: argparse.Namespace, case_paths: CasePaths) -> dict[str, Any]:
+    excluded_roots = [case_paths.workdir / "cache", case_paths.workdir / "report"]
+    files = [
+        inventory_file(path, args.default_timezone, args.sample_limit)
+        for path in discover(args.paths, args.include_hidden, excluded_roots)
+    ]
     return {
-        "case_id": case_id,
+        "case_id": case_paths.cache_dir.name,
         "mode": args.mode,
         "default_timezone": args.default_timezone,
+        "invocation_cwd": str(case_paths.workdir),
+        "output_paths": {
+            "cache_dir": str(case_paths.cache_dir),
+            "report_dir": str(case_paths.report_dir),
+            "report_path": str(case_paths.report_path),
+        },
         "network_assist": "enabled",
         "network_status": "unknown",
         "created_at": datetime.now().astimezone().isoformat(),
@@ -241,20 +259,35 @@ def main() -> int:
         help="Required explicit workflow mode. The skill must confirm this before running tools.",
     )
     parser.add_argument("--case-id")
+    parser.add_argument("--workdir", type=Path, default=Path.cwd(), help="Base directory for cache and report case outputs")
+    parser.add_argument("--overwrite-case", action="store_true", help="Allow reuse of an existing case output directory")
     parser.add_argument("--default-timezone", default="Asia/Shanghai")
     parser.add_argument("--sample-limit", type=int, default=20000, help="Maximum lines sampled per text file during inventory")
     parser.add_argument("--include-hidden", action="store_true")
-    parser.add_argument("--output-dir", help="Directory for log-inventory.json and analysis-manifest.json")
+    parser.add_argument("--output-dir", help="Legacy override for the case cache directory")
     parser.add_argument("--json", action="store_true", help="Print manifest JSON")
     args = parser.parse_args()
 
-    manifest = build_manifest(args)
+    source_paths = [Path(raw).expanduser() for raw in args.paths]
+    case_id = args.case_id or default_case_id(source_paths)
+    case_paths = resolve_case_paths(args.workdir, case_id)
     if args.output_dir:
-        out = Path(args.output_dir)
-        out.mkdir(parents=True, exist_ok=True)
-        (out / "analysis-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-        (out / "log-inventory.json").write_text(json.dumps({"files": manifest["files"]}, ensure_ascii=False, indent=2), encoding="utf-8")
-    if args.json or not args.output_dir:
+        cache_dir = Path(args.output_dir).expanduser().resolve()
+        case_paths = CasePaths(
+            workdir=case_paths.workdir,
+            cache_dir=cache_dir,
+            report_dir=case_paths.report_dir,
+            manifest_path=cache_dir / "analysis-manifest.json",
+            report_path=case_paths.report_path,
+        )
+    prepare_case_paths(case_paths, allow_existing=args.overwrite_case)
+    manifest = build_manifest(args, case_paths)
+    case_paths.manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (case_paths.cache_dir / "log-inventory.json").write_text(
+        json.dumps({"files": manifest["files"]}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    if args.json:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
     return 0
 
