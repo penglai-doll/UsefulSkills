@@ -13,10 +13,12 @@ NS = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 def _shared_strings(zf: ZipFile) -> list[str]:
     if "xl/sharedStrings.xml" not in zf.namelist():
         return []
-    root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
     values: list[str] = []
-    for si in root.findall("a:si", NS):
-        values.append("".join(t.text or "" for t in si.findall(".//a:t", NS)))
+    with zf.open("xl/sharedStrings.xml") as stream:
+        for _, elem in ET.iterparse(stream, events=("end",)):
+            if elem.tag.endswith("}si"):
+                values.append("".join(t.text or "" for t in elem.findall(".//a:t", NS)))
+                elem.clear()
     return values
 
 
@@ -35,21 +37,40 @@ def _cell_value(cell: ET.Element, shared: list[str]) -> str:
     return value
 
 
-def iter_rows(path: str | Path, max_rows: int | None = None):
+def _column_index(cell_ref: str) -> int:
+    letters = "".join(ch for ch in cell_ref if ch.isalpha()).upper()
+    value = 0
+    for char in letters:
+        value = value * 26 + ord(char) - ord("A") + 1
+    return max(0, value - 1)
+
+
+def iter_rows(path: str | Path, max_rows: int | None = None, sheet_index: int = 0):
     with ZipFile(path) as zf:
         shared = _shared_strings(zf)
         sheets = sorted(
             [n for n in zf.namelist() if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", n)],
             key=lambda n: int(re.search(r"sheet(\d+)\.xml", n).group(1)),
         )
-        if not sheets:
+        if sheet_index < 0 or sheet_index >= len(sheets):
             return
-        root = ET.fromstring(zf.read(sheets[0]))
-        for idx, row in enumerate(root.findall(".//a:sheetData/a:row", NS), 1):
-            cells = row.findall("a:c", NS)
-            yield idx, [_cell_value(cell, shared) for cell in cells]
-            if max_rows is not None and idx >= max_rows:
-                break
+        emitted = 0
+        with zf.open(sheets[sheet_index]) as stream:
+            for event, elem in ET.iterparse(stream, events=("end",)):
+                if event != "end" or not elem.tag.endswith("}row"):
+                    continue
+                row_number = int(elem.get("r") or emitted + 1)
+                values: list[str] = []
+                for cell in elem.findall("a:c", NS):
+                    position = _column_index(cell.get("r") or "A1")
+                    while len(values) <= position:
+                        values.append("")
+                    values[position] = _cell_value(cell, shared)
+                elem.clear()
+                yield row_number, values
+                emitted += 1
+                if max_rows is not None and emitted >= max_rows:
+                    break
 
 
 def read_header(path: str | Path) -> list[str]:
