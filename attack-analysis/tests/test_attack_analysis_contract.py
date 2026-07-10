@@ -17,6 +17,20 @@ def run_cmd(args):
 
 
 class AttackAnalysisContractTests(unittest.TestCase):
+    def test_generated_case_outputs_are_gitignored(self):
+        for relative_path in [
+            "cache/review-case/analysis-manifest.json",
+            "report/review-case/log-analysis-report.md",
+        ]:
+            result = subprocess.run(
+                ["git", "check-ignore", "--quiet", relative_path],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, f"expected Git to ignore {relative_path}")
+
     def test_skill_frontmatter_and_agent_metadata(self):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("name: attack-analysis", skill)
@@ -26,6 +40,13 @@ class AttackAnalysisContractTests(unittest.TestCase):
         self.assertIn("Do not send externally by default", skill)
         agent = (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
         self.assertIn("$attack-analysis", agent)
+
+    def test_skill_docs_use_case_output_layout(self):
+        for relative_path in ["SKILL.md", "references/workflow.md"]:
+            content = (ROOT / relative_path).read_text(encoding="utf-8")
+            self.assertNotIn("output/attack-analysis/<case-id>", content)
+            self.assertIn("$PWD/cache/<case-id>/", content)
+            self.assertIn("$PWD/report/<case-id>/log-analysis-report.md", content)
 
     def test_inventory_detects_verified_log_types_and_privacy_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -65,6 +86,46 @@ class AttackAnalysisContractTests(unittest.TestCase):
             for entry in manifest["files"]:
                 self.assertIn("timezone", entry)
                 self.assertIn("time_parse_status", entry)
+
+    def test_inventory_prints_manifest_without_json_when_no_legacy_output_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp) / "workdir"
+            result = run_cmd([
+                PY,
+                "scripts/inventory_logs.py",
+                str(FIXTURE),
+                "--mode",
+                "quick-report",
+                "--case-id",
+                "stdout-case",
+                "--workdir",
+                str(workdir),
+            ])
+
+            self.assertTrue(result.stdout.strip(), "expected manifest JSON on stdout")
+            manifest = json.loads(result.stdout)
+            self.assertEqual(manifest["case_id"], "stdout-case")
+
+    def test_inventory_legacy_output_dir_stays_quiet_without_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            output_dir = tmp_path / "legacy-cache"
+            result = run_cmd([
+                PY,
+                "scripts/inventory_logs.py",
+                str(FIXTURE),
+                "--mode",
+                "quick-report",
+                "--case-id",
+                "legacy-case",
+                "--workdir",
+                str(tmp_path / "workdir"),
+                "--output-dir",
+                str(output_dir),
+            ])
+
+            self.assertEqual(result.stdout, "")
+            self.assertTrue((output_dir / "analysis-manifest.json").is_file())
 
     def test_inventory_skips_case_cache_and_report_when_workdir_is_scanned(self):
         with tempfile.TemporaryDirectory() as tmp:

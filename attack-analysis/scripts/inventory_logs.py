@@ -287,7 +287,7 @@ def main() -> int:
         json.dumps({"files": manifest["files"]}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    if args.json:
+    if args.json or not args.output_dir:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
     return 0
 

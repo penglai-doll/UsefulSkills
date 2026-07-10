@@ -28,16 +28,16 @@ Default network assist is enabled for public enrichment. If networking fails, re
 6. Generate basic correlation candidates by IP/account/request/session/path and time window.
 7. Use AI to review candidate events/correlations, reject noise, and promote only evidence-backed attack-chain steps.
 8. Enrich attacker IP/domain/ASN/public vulnerability context when useful; keep external enrichment separate from log evidence.
-9. Write `report/log-analysis-report.md` with timeline, source IPs, attack process, evidence, current problems, remediation, and limitations.
+9. Write `$PWD/report/<case-id>/log-analysis-report.md` with timeline, source IPs, attack process, evidence, current problems, remediation, and limitations.
 
 Detailed workflow: [workflow.md](./references/workflow.md)
 
 ## Scripts
 
 ```bash
-python3 scripts/inventory_logs.py <paths...> --mode quick-report --json --output-dir output/attack-analysis/<case-id>/cache
-python3 scripts/extract_log_events.py --manifest output/attack-analysis/<case-id>/cache/analysis-manifest.json --output-dir output/attack-analysis/<case-id>/cache --json
-python3 scripts/correlate_events.py --events output/attack-analysis/<case-id>/cache/event-candidates.json --output-dir output/attack-analysis/<case-id>/cache --json
+python3 scripts/inventory_logs.py <paths...> --mode quick-report --case-id "<case-id>" --workdir "$PWD" --json
+python3 scripts/extract_log_events.py --manifest "$PWD/cache/<case-id>/analysis-manifest.json" --output-dir "$PWD/cache/<case-id>/" --json
+python3 scripts/correlate_events.py --events "$PWD/cache/<case-id>/event-candidates.json" --output-dir "$PWD/cache/<case-id>/" --json
 ```
 
 Script roles:

@@ -54,14 +54,14 @@ Recommended extraction order:
 
 ## Outputs
 
-Default output root:
+Default outputs under the invocation working directory:
 
 ```text
-output/attack-analysis/<case-id>/
-  report/log-analysis-report.md
-  cache/log-inventory.json
-  cache/analysis-manifest.json
-  cache/event-candidates.json
-  cache/correlation-candidates.json
-  cache/ip-enrichment.json
+$PWD/cache/<case-id>/
+  log-inventory.json
+  analysis-manifest.json
+  event-candidates.json
+  correlation-candidates.json
+  ip-enrichment.json
+$PWD/report/<case-id>/log-analysis-report.md
 ```
