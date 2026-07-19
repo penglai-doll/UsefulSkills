@@ -11,6 +11,9 @@ android-malware-analysis/**/__pycache__/
 /docs/
 output*/
 
+# Per-machine APK analysis ledger state; lessons live in references/gotchas.md.
+android-malware-analysis/skill-ledger.json
+
 # Local malware samples must stay outside GitHub history.
 *.apk
 *.apks

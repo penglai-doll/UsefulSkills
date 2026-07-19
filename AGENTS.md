@@ -24,7 +24,7 @@ Each skill directory follows this layout:
 
 ## Current Skills
 
-- **android-malware-analysis** — Static analysis of suspicious Android packages (APK/XAPK/APKS/ZIP/DEX). Generates Chinese Markdown + DOCX investigation reports with two-phase callback extraction and SDK key recovery.
+- **android-malware-analysis** — Static analysis of suspicious Android packages (APK/XAPK/APKS/ZIP/DEX). Generates Chinese Markdown + DOCX investigation reports with two-phase endpoint extraction (code inference with concat-URL reconstruction, three-way callback/service/low-context classification) and confidence-annotated SDK key recovery.
 
 ## Working With Skills
 

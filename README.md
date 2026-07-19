@@ -6,17 +6,22 @@
 
 ### 目前已经完成/计划
 
-- [x] 恶意APK分析器6.0.0
+- [x] 恶意APK分析器6.1.0
   - 入口改为先选择固证/逆向双模式，不再默认任务类别
-  - apktool 优先建立可复用工作区，盘点 Manifest、资源、assets、隐藏载荷与 SO
+  - apktool 优先建立可复用工作区，盘点 Manifest、资源、assets、隐藏载荷与 SO；apktool 成功时直接复用 smali，JADX 主要用于隐藏载荷深挖
   - 以 `evidence_id`、来源、提取方法和状态替代冗杂总风险评分
   - 默认支持 AI+联网辅助 SDK、域名、调证字段、框架案例、分析案例和架构案例研判
   - 报告与中间产物统一输出到 `output/<sample>/report` 和 `output/<sample>/cache`
   - 已支持 SDK/平台调证值、SDK 使用痕迹、回连候选、签名证书、渠道标识、打包环境、嵌套载荷和关键哈希提取
-  - v6 明确脚本/AI 分工：脚本负责确定性候选、工作区和静态深挖，AI 负责业务理解、路径追踪、联网辅助分析和报告取舍
+  - 两阶段端点提取重建：一方/第三方分流 + 代码推理（变量赋值跟踪、拼接 URL 还原），端点证据原地标注回连候选/仅服务地址/低上下文三分类与建议处置，分类不改动证据 status
+  - SDK 调证值新增 `confidence` 置信标注（high/medium），仅作审阅优先级提示
+  - 固证报告端点章节重构为“回连候选研判”：回连候选突出展示、服务地址明确标注非回连 IOC、低上下文只做计数与理由分桶，节首固定“AI 研判为准”声明
+  - 6.1 明确脚本/AI 分工：脚本只做确定性候选与分类标注、工作区和静态深挖，AI 负责业务理解、路径追踪、联网辅助分析、结论定性和报告取舍
+  - 全部外部工具 subprocess 调用带超时防护，畸形样本不再挂死管线；Ghidra/Rizin 等工具状态诚实标注 not_available/prepared_not_executed
+  - Windows 工具链建议优先 7z/JADX 本机安装，apktool 缺失时可 `--allow-unpack-fallback` 降级
   - ZIP fallback、符号链接、超大文本和 Native strings 均采用有界扫描；专用 provider 仅提交命中规则的 `styles.xml/info` 密文
   - Native 深挖仅对证据选中的 SO 调用 Ghidra/Rizin、Capstone、Unicorn 和 YARA
-  - 报告拆分为固证报告、逆向报告和技术附录；动态测试在 v6.x 仅保留接口契约
+  - 报告拆分为固证报告、逆向报告和技术附录；动态测试在 6.1.x 仅保留接口契约
 - [x] Linux Loader v1.0.0
   - 面向 WSL2/Linux 的 Linux 检材只读挂载、基础盘点和按需分析
   - 支持 raw/dd/img 与 E01；E01 缺 `ewf-tools` 时可提示 apt 安装或 wget/curl 下载到临时缓存，FUSE 不可用时提示提权或 `ewfexport` 降级
