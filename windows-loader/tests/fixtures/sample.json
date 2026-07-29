@@ -1,0 +1,5 @@
+{
+  "application": "FooChat",
+  "server": "https://chat.example.test",
+  "account": "alice@example.test"
+}

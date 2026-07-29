@@ -1,0 +1,6 @@
+{
+  "events": [
+    {"log": "Security", "event_id": 4624, "timestamp": "2025-01-02T03:04:05Z", "provider": "Security", "message": "Alice logged on"},
+    {"log": "Security", "event_id": 4625, "timestamp": "2025-01-02T03:05:05Z", "provider": "Security", "message": "Invalid password"}
+  ]
+}

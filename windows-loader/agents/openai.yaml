@@ -1,0 +1,4 @@
+interface:
+  display_name: "Windows Loader"
+  short_description: "Read-only Windows guest image mounting and focused forensic triage."
+  default_prompt: "Use $windows-loader to mount this Windows guest image read-only and perform focused evidence triage."
