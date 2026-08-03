@@ -39,6 +39,24 @@
   - 默认交互与分页证据查询；Markdown/校验分析包按需导出；`经验.md` 保持 12 KiB 硬上限
   - TLS、HTTP/2、SMB、RDP、Wi-Fi、HTTP/3 等按真实能力维持 best-effort 或 metadata-only，不冒充已验证
 
+### WireToutetu 快速使用
+
+入口：`wire-toutetu/scripts/wiretoutetu.py`
+
+```powershell
+# 环境与 TShark 能力检查
+python wire-toutetu/scripts/wiretoutetu.py preflight --json
+
+# 默认离线分析；未指定问题时自动还原完整事件链
+python wire-toutetu/scripts/wiretoutetu.py analyze <capture> --case-dir <case-dir>
+
+# 分页读取时间线或按证据 ID 精确查询
+python wire-toutetu/scripts/wiretoutetu.py query --case-dir <case-dir> --view timeline --limit 50
+python wire-toutetu/scripts/wiretoutetu.py query --case-dir <case-dir> --view evidence --id <EVIDENCE-ID>
+```
+
+知识入口位于 `wire-toutetu/references/index.md`。模型应根据 CLI 返回的 `routes` 只读取命中的领域索引和知识叶子，避免一次载入完整知识库。运行依赖见 `wire-toutetu/requirements.txt`；Scapy 仅用于离线测试夹具生成。
+
 - [ ] 舆情分析
 
 尽可能以更优（各种奇怪渠道？）的方式不断完善实现
