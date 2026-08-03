@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -24,19 +23,33 @@ def cleanup_case(case_dir: str | Path) -> dict[str, Any]:
     inputs = [Path(manifest["capture"]["path"]).resolve()]
     inputs.extend(Path(item["path"]).resolve() for item in manifest["sidecars"])
     before = {str(path): sha256_file(path) for path in inputs if path.is_file()}
-    preserved_inside = {path for path in inputs if _inside(path, root)}
     removed: list[str] = []
-    for path in sorted(root.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+    entries = state.generated_files()
+    protected_inputs = {path for path in inputs if _inside(path, root)}
+    case_metadata = {"case.json", ".wiretoutetu-generated.json"}
+    for item in entries:
+        if item["path"] in case_metadata:
+            continue
+        path, _ = state._artifact_relative(item["path"])
         resolved = path.resolve()
-        if path.is_file() and resolved not in preserved_inside:
+        if resolved in protected_inputs:
+            continue
+        if path.is_file() or path.is_symlink():
             path.unlink()
             removed.append(str(resolved))
-        elif path.is_dir():
-            try:
-                path.rmdir()
-            except OSError:
-                pass
+    for directory in (state.records_dir, state.root / "objects", state.root / "streams", state.checkpoints_dir):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
     after = {str(path): sha256_file(path) for path in inputs if path.is_file()}
     if before != after:
         raise RuntimeError("original input hash changed during cleanup")
+    for item in entries:
+        if item["path"] not in case_metadata:
+            continue
+        path, _ = state._artifact_relative(item["path"])
+        if path.is_file():
+            path.unlink()
+            removed.append(str(path.resolve()))
     return {"removed_files": removed, "preserved_inputs": sorted(after), "input_hashes": after}

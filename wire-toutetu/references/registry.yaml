@@ -465,6 +465,7 @@
     "read_when": "出现 URL-safe Base64 分帧、2 字节 XOR 或 KLV 键时。",
     "support_status": "verified-decode",
     "fixture_ids": [
+      "pcap.tunnels-suo5-regeorg",
       "txn.suo5-klv"
     ],
     "sources": [
@@ -486,6 +487,7 @@
     "read_when": "出现 CONNECT/FORWARD/READ/DISCONNECT 头时。",
     "support_status": "verified-extract",
     "fixture_ids": [
+      "pcap.tunnels-suo5-regeorg",
       "txn.regeorg-control"
     ],
     "sources": [
@@ -691,7 +693,7 @@
       "gcm"
     ],
     "read_when": "sidecar/profile 指定 AES key/mode/IV/nonce/tag 时。",
-    "support_status": "verified-decode",
+    "support_status": "best-effort",
     "fixture_ids": [],
     "sources": [
       "https://github.com/rebeyond/Behinder",
@@ -712,7 +714,7 @@
       "elf"
     ],
     "read_when": "输出可能是文件或归档时。",
-    "support_status": "verified-extract",
+    "support_status": "best-effort",
     "fixture_ids": [],
     "sources": [
       "https://hello-ctf.com/hc-misc/pcap/"
@@ -731,7 +733,7 @@
       "preflight"
     ],
     "read_when": "开始分析或工具缺失时。",
-    "support_status": "verified-extract",
+    "support_status": "best-effort",
     "fixture_ids": [],
     "sources": [
       "https://www.wireshark.org/docs/man-pages/tshark.html"

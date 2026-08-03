@@ -12,6 +12,7 @@ import zlib
 from typing import Any, Mapping
 
 from cryptography.hazmat.primitives import padding
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -162,7 +163,7 @@ def decode_one(
     material = {"algorithm": algorithm, "input_sha256": input_hash, "parameter_source": parameter_source, "parameters": safe_parameters}
     try:
         output = _perform(value, algorithm, parameters)
-    except (ValueError, TypeError, UnicodeError, binascii.Error, zlib.error) as exc:
+    except (ValueError, TypeError, UnicodeError, binascii.Error, zlib.error, InvalidTag) as exc:
         return None, {
             "id": stable_evidence_id("DEC", material),
             "algorithm": algorithm,

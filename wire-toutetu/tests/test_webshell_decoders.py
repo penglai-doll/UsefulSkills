@@ -28,6 +28,22 @@ def xor(data: bytes, key: bytes) -> bytes:
 
 
 class WebShellDecoderTests(unittest.TestCase):
+    def test_suo5_invalid_port_becomes_failed_result(self) -> None:
+        import base64
+        import struct
+        from wiretoutetu_core.webshell import decode_suo5_frame
+
+        fields = {b"ac": b"0", b"p": b"nope"}
+        body = b"".join(bytes([len(key)]) + key + struct.pack(">I", len(value)) + value for key, value in fields.items())
+        random = b"xy"
+        encoded = base64.urlsafe_b64encode(xor(body, random)).rstrip(b"=")
+        header = base64.urlsafe_b64encode(random + xor(struct.pack(">I", len(encoded)), random)).rstrip(b"=")
+        frame = header + encoded
+
+        result = decode_suo5_frame(frame)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("port", result["error"])
     def test_behinder_v3_aes_base64_and_missing_key(self) -> None:
         from wiretoutetu_core.webshell import decode_behinder
 

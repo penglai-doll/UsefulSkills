@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import binascii
 import json
 import re
 from pathlib import Path
@@ -21,21 +22,44 @@ from .webshell import (
 )
 
 
-def _configs(sidecars: Iterable[Path]) -> list[dict[str, Any]]:
+def _configs(sidecars: Iterable[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     profiles: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
     for path in sidecars:
         if path.suffix.lower() != ".json":
             continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            failures.append({
+                "stage": "webshell-config", "path": str(path),
+                "message": f"sidecar JSON parse failed: {type(exc).__name__}: {exc}",
+            })
+            continue
+        if not isinstance(data, dict):
+            failures.append({
+                "stage": "webshell-config", "path": str(path),
+                "message": f"sidecar structure must be an object, got {type(data).__name__}",
+            })
             continue
         values = data.get("webshell_profiles", data.get("webshell", []))
         if isinstance(values, dict):
             values = [values]
-        if isinstance(values, list):
-            profiles.extend(item for item in values if isinstance(item, dict) and item.get("family"))
-    return profiles
+        if not isinstance(values, list):
+            failures.append({
+                "stage": "webshell-config", "path": str(path),
+                "message": f"sidecar structure webshell_profiles must be an object or list, got {type(values).__name__}",
+            })
+            continue
+        for item in values:
+            if isinstance(item, dict) and item.get("family"):
+                profiles.append(item)
+            else:
+                failures.append({
+                    "stage": "webshell-config", "path": str(path),
+                    "message": "sidecar structure contains a profile without a family",
+                })
+    return profiles, failures
 
 
 def _matches(profile: dict[str, Any], transaction: dict[str, Any]) -> bool:
@@ -66,45 +90,85 @@ def _serializable(value: Any) -> Any:
     return value
 
 
+def _single_value_headers(headers: Any) -> dict[str, str]:
+    if not isinstance(headers, dict):
+        raise TypeError("headers must be an object")
+    result: dict[str, str] = {}
+    for key, value in headers.items():
+        if isinstance(value, list):
+            if value:
+                result[str(key)] = str(value[-1])
+        else:
+            result[str(key)] = str(value)
+    return result
+
+
 def apply_webshell_profiles(
     state: CaseState, transactions: list[dict[str, Any]], sidecars: Iterable[Path]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     decodes: list[dict[str, Any]] = []
     webshell_events: list[dict[str, Any]] = []
-    failures: list[dict[str, Any]] = []
-    for profile in _configs(sidecars):
+    profiles, failures = _configs(sidecars)
+    for profile in profiles:
         family = str(profile["family"]).lower()
         for transaction in transactions:
-            if transaction.get("protocol") != "http/1.x" or not _matches(profile, transaction):
+            if transaction.get("protocol") not in {"http/1.x", "websocket"}:
                 continue
-            direction = str(profile.get("direction", "request"))
+            try:
+                matched = _matches(profile, transaction)
+            except (ValueError, TypeError, re.error) as exc:
+                failures.append({
+                    "stage": "webshell-config", "family": family, "transaction_id": transaction.get("id"),
+                    "message": f"profile match failed: {type(exc).__name__}: {exc}",
+                })
+                continue
+            if not matched:
+                continue
+            if family == "suo5" and transaction.get("protocol") != "websocket":
+                continue
+            if family != "suo5" and transaction.get("protocol") == "websocket":
+                continue
+            default_direction = "payload" if transaction.get("protocol") == "websocket" else "request"
+            direction = str(profile.get("direction", default_direction))
             payload_meta = transaction.get(direction, {}).get("body") or {}
             payload_path = payload_meta.get("path")
-            if not payload_path or not Path(payload_path).is_file():
+            if family in {"regeorg", "neo-regeorg", "neoreg"} and not payload_path:
+                payload = b""
+            elif not payload_path or not Path(payload_path).is_file():
                 failures.append({"stage": "webshell", "family": family, "transaction_id": transaction["id"], "message": f"{direction} body is unavailable"})
                 continue
-            payload = Path(payload_path).read_bytes()
-            if family == "behinder":
-                result = decode_behinder(
-                    payload, key=_key(profile), cipher=str(profile.get("cipher", "aes-ecb")),
-                    wrapper=str(profile.get("wrapper", "raw")), version=str(profile.get("version", "unknown")),
-                    wrapper_options=profile.get("wrapper_options"),
-                    iv=bytes.fromhex(profile["iv_hex"]) if profile.get("iv_hex") else None,
-                )
-            elif family == "godzilla":
-                result = decode_godzilla(payload, key=_key(profile), profile=str(profile.get("profile", "java-aes-raw")))
-            elif family == "antsword":
-                result = decode_antsword(payload, chain=list(profile.get("chain", ["raw"])))
-            elif family in {"chopper", "china-chopper"}:
-                result = decode_chopper(payload, language=str(profile.get("language", "php")))
-            elif family in {"weevely", "weevely3"}:
-                result = decode_weevely3(payload, password=profile.get("password"))
-            elif family == "suo5":
-                result = decode_suo5_frame(payload)
-            elif family in {"regeorg", "neo-regeorg", "neoreg"}:
-                result = decode_regeorg_control(profile.get("headers", {}), payload)
             else:
-                failures.append({"stage": "webshell", "family": family, "transaction_id": transaction["id"], "message": "unknown profile family"})
+                payload = Path(payload_path).read_bytes()
+            try:
+                if family == "behinder":
+                    result = decode_behinder(
+                        payload, key=_key(profile), cipher=str(profile.get("cipher", "aes-ecb")),
+                        wrapper=str(profile.get("wrapper", "raw")), version=str(profile.get("version", "unknown")),
+                        wrapper_options=profile.get("wrapper_options"),
+                        iv=bytes.fromhex(profile["iv_hex"]) if profile.get("iv_hex") else None,
+                    )
+                elif family == "godzilla":
+                    result = decode_godzilla(payload, key=_key(profile), profile=str(profile.get("profile", "java-aes-raw")))
+                elif family == "antsword":
+                    result = decode_antsword(payload, chain=list(profile.get("chain", ["raw"])))
+                elif family in {"chopper", "china-chopper"}:
+                    result = decode_chopper(payload, language=str(profile.get("language", "php")))
+                elif family in {"weevely", "weevely3"}:
+                    result = decode_weevely3(payload, password=profile.get("password"))
+                elif family == "suo5":
+                    result = decode_suo5_frame(payload)
+                elif family in {"regeorg", "neo-regeorg", "neoreg"}:
+                    captured_headers = _single_value_headers(transaction.get("request", {}).get("headers", {}))
+                    configured_headers = _single_value_headers(profile.get("headers", {}))
+                    result = decode_regeorg_control({**captured_headers, **configured_headers}, payload)
+                else:
+                    failures.append({"stage": "webshell", "family": family, "transaction_id": transaction["id"], "message": "unknown profile family"})
+                    continue
+            except (ValueError, TypeError, KeyError, UnicodeError, binascii.Error) as exc:
+                failures.append({
+                    "stage": "webshell", "family": family, "transaction_id": transaction["id"],
+                    "message": f"profile decode failed: {type(exc).__name__}: {exc}",
+                })
                 continue
             output = result.get("output")
             for record in result.get("records", []):
@@ -118,7 +182,7 @@ def apply_webshell_profiles(
                 digest = hashlib.sha256(output).hexdigest()
                 decode_id = decodes[-1]["id"] if decodes else stable_evidence_id("DEC", {"transaction": transaction["id"], "family": family, "sha256": digest})
                 output_path = state.root / "objects" / f"{decode_id}-{direction}.bin"
-                output_path.write_bytes(output)
+                state.write_artifact(output_path, output, owner="decode")
                 output_meta = {"path": str(output_path.resolve()), "size": len(output), "sha256": digest}
             event_id = stable_evidence_id("EVT", {"transaction": transaction["id"], "family": family, "direction": direction})
             webshell_events.append({

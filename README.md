@@ -33,9 +33,9 @@
 
 - [x] WireToutetu v1
   - 面向 Qwen 35B-A3B 等本地小模型的离线 PCAP/PCAPNG/CAP、CTF 与 WebShell 流量分析
-  - Python 3.10+ 与 TShark 4.4/4.6 共用内核，显式区分 Windows、Linux 与 WSL
+  - Python 3.10+ 与 TShark 4.4/4.6 共用内核，显式区分 Windows、Linux 与 WSL；当前实测环境为 Windows、Python 3.11.9、TShark 4.6.4
   - 以插件注册表、41 个知识叶子和双层索引按信号加载，避免一次灌入完整知识库
-  - 已验证 HTTP/1.x 对象恢复、TCP/UDP/DNS/ICMP、FTP/SMTP/USB 提取器，以及冰蝎、哥斯拉、蚁剑、菜刀、Weevely3、suo5、reGeorg 核心离线解码夹具
+  - 已验证 HTTP/1.x 对象恢复、TCP/UDP/DNS/ICMP、FTP/SMTP/USB 提取器，以及冰蝎、哥斯拉、蚁剑、菜刀、Weevely3 核心离线解码夹具；suo5 WebSocket 载荷与 reGeorg 自定义头另有真实 TShark 端到端夹具
   - 默认交互与分页证据查询；Markdown/校验分析包按需导出；`经验.md` 保持 12 KiB 硬上限
   - TLS、HTTP/2、SMB、RDP、Wi-Fi、HTTP/3 等按真实能力维持 best-effort 或 metadata-only，不冒充已验证
 

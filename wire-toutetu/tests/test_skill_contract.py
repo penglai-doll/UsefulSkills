@@ -14,6 +14,8 @@ class SkillSurfaceTests(unittest.TestCase):
     def test_skill_has_discoverable_entrypoints(self) -> None:
         self.assertTrue((SKILL_ROOT / "SKILL.md").is_file())
         self.assertTrue((SKILL_ROOT / "agents" / "openai.yaml").is_file())
+        self.assertEqual((SKILL_ROOT / "requirements.txt").read_text(encoding="utf-8").strip(), "cryptography>=42")
+        self.assertIn("scapy", (SKILL_ROOT / "requirements-test.txt").read_text(encoding="utf-8").lower())
         self.assertTrue(CLI.is_file())
 
     def test_cli_help_lists_every_public_command(self) -> None:

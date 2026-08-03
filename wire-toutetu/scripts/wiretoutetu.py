@@ -28,8 +28,13 @@ PUBLIC_COMMANDS = (
 )
 
 
+class JsonArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise ValueError(message)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = JsonArgumentParser(
         prog="wiretoutetu.py",
         description="Offline PCAP and WebShell traffic analysis.",
     )
@@ -129,6 +134,7 @@ def _run(args: argparse.Namespace) -> tuple[dict, int]:
             except (OSError, ValueError):
                 pending = result["state"].root / "experience-pending.json"
                 pending.write_text(json.dumps(recent, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                result["state"].register_generated(pending, owner="experience")
         return make_envelope(
             status=result["status"], case_dir=str(result["state"].root), stage="analysis",
             summary=result["summary"], counts=result["counts"], routes=result["routes"],
@@ -140,10 +146,15 @@ def _run(args: argparse.Namespace) -> tuple[dict, int]:
         collection = args.view
         if args.view == "timeline" and not (state.records_dir / "timeline.jsonl").is_file():
             collection = "events"
-        result = state.query_records(collection, limit=args.limit, cursor=args.cursor)
-        items = result["items"]
         if args.id:
-            items = [item for item in items if item.get("id") == args.id]
+            item = state.find_record(collection, args.id)
+            result = {"items": [item] if item is not None else [], "next_cursor": None, "returned_bytes": 0}
+            items = result["items"]
+            if item is not None:
+                result["returned_bytes"] = len(json.dumps(item, ensure_ascii=False).encode("utf-8"))
+        else:
+            result = state.query_records(collection, limit=args.limit, cursor=args.cursor)
+            items = result["items"]
         return make_envelope(
             status="ok", case_dir=str(state.root), stage="query",
             summary={"view": args.view, "items": items, "next_cursor": result["next_cursor"], "returned_bytes": result["returned_bytes"]},
@@ -184,12 +195,13 @@ def _run(args: argparse.Namespace) -> tuple[dict, int]:
 
 
 def main() -> int:
-    args = build_parser().parse_args()
+    args: argparse.Namespace | None = None
     try:
+        args = build_parser().parse_args()
         envelope, code = _run(args)
     except Exception as exc:
         envelope = make_envelope(
-            status="error", stage=getattr(args, "command", "unknown"),
+            status="error", stage=getattr(args, "command", None) or "arguments",
             summary={"message": str(exc)}, errors=[{"type": type(exc).__name__, "message": str(exc)}],
             completeness="unknown", next_actions=["Inspect the error and retry the same stage."],
         )

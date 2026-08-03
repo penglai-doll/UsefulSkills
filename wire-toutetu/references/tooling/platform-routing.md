@@ -3,7 +3,7 @@ knowledge_id: tooling.platform-routing
 title: Windows/Linux/WSL 路由
 signals: [windows, linux, wsl, preflight]
 read_when: 开始分析或工具缺失时。
-support_status: verified-extract
+support_status: best-effort
 ---
 
 # Windows/Linux/WSL 路由
@@ -14,7 +14,7 @@ support_status: verified-extract
 
 ## 版本矩阵
 
-- 当前等级：`verified-extract`；只有实际夹具通过才晋级。
+- 当前等级：`best-effort`；只有实际夹具通过才晋级。
 - 先读取 `preflight` 的平台、TShark 版本和字段能力；4.4/4.6 差异走动态探测。
 
 ## 观察特征
@@ -39,7 +39,7 @@ preflight 只探测并给升级提示，安装与驱动另行确认。
 
 ## 夹具
 
-无独立夹具；维持当前分级。
+Windows/TShark 4.6.4 ????Linux/WSL ??? mock/????????? smoke ????
 
 ## 来源
 

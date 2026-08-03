@@ -192,9 +192,16 @@ def decode_suo5_frame(payload: bytes) -> dict[str, Any]:
     action_byte = fields.get("ac", b"\xff")[0] if fields.get("ac") else 0xFF
     target = None
     if "h" in fields or "p" in fields:
+        try:
+            port = int(fields.get("p", b"0") or b"0")
+        except ValueError as exc:
+            return {
+                "family": "suo5", "status": "failed", "error": f"invalid suo5 port: {exc}",
+                "fields": {key: value.hex() for key, value in fields.items()},
+            }
         target = {
             "host": fields.get("h", b"").decode("utf-8", "replace"),
-            "port": int(fields.get("p", b"0") or b"0"),
+            "port": port,
         }
     return {
         "family": "suo5",

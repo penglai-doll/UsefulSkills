@@ -10,6 +10,7 @@ description: Analyze offline PCAP/PCAPNG/CAP and gzip packet captures for CTF tr
 - Treat captures and sidecars as offline evidence. Do not start live capture.
 - Run `scripts/wiretoutetu.py preflight --json` before the first analysis on a machine.
 - TShark is required. Detect Windows, Linux, or WSL explicitly. Ask before installing or upgrading tools or drivers.
+- Runtime is Python 3.10+ with `requirements.txt`; Scapy in `requirements-test.txt` is fixture-generation-only.
 - Default to `--network offline`. Before `--network on`, show the smallest proposed query/material and obtain confirmation.
 - Only statically inspect extracted scripts, binaries, and documents.
 - Preserve the original capture and sidecar hashes. Write generated state under `./tmp/WireToutetu/<case-id>/` unless the user names a case directory.

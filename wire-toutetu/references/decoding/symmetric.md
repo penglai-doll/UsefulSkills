@@ -3,7 +3,7 @@ knowledge_id: decoding.symmetric
 title: AES 对称解密
 signals: [aes, cbc, ecb, gcm]
 read_when: sidecar/profile 指定 AES key/mode/IV/nonce/tag 时。
-support_status: verified-decode
+support_status: best-effort
 ---
 
 # AES 对称解密
@@ -14,7 +14,7 @@ sidecar/profile 指定 AES key/mode/IV/nonce/tag 时。
 
 ## 版本矩阵
 
-- 当前等级：`verified-decode`；只有实际夹具通过才晋级。
+- 当前等级：`best-effort`；只有实际夹具通过才晋级。
 - 先读取 `preflight` 的平台、TShark 版本和字段能力；4.4/4.6 差异走动态探测。
 
 ## 观察特征
@@ -39,7 +39,7 @@ sidecar/profile 指定 AES key/mode/IV/nonce/tag 时。
 
 ## 夹具
 
-无独立夹具；维持当前分级。
+ECB/CBC ? WebShell ?????GCM ???? tag?GCM ???????????
 
 ## 来源
 

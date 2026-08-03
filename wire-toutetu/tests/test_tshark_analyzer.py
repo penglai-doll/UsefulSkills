@@ -7,6 +7,8 @@ import unittest
 import json
 import gzip
 import subprocess
+import base64
+import struct
 from pathlib import Path
 from unittest import mock
 
@@ -74,6 +76,47 @@ def build_behinder_post_fixture(path: Path) -> tuple[bytes, bytes]:
     return key, plain
 
 
+def suo5_frame(fields: dict[str, bytes]) -> bytes:
+    klv = b"".join(bytes([len(key)]) + key.encode() + struct.pack(">I", len(value)) + value for key, value in fields.items())
+    obs = b"\x23\x42"
+    xorred = bytes(value ^ obs[index % 2] for index, value in enumerate(klv))
+    encoded = base64.urlsafe_b64encode(xorred).rstrip(b"=")
+    length = struct.pack(">I", len(encoded))
+    header = base64.urlsafe_b64encode(obs + bytes(value ^ obs[index % 2] for index, value in enumerate(length))).rstrip(b"=")
+    return header + encoded
+
+
+def build_tunnel_fixture(path: Path) -> None:
+    try:
+        from scapy.all import Ether, IP, Raw, TCP, wrpcap
+    except ImportError as exc:  # pragma: no cover
+        raise unittest.SkipTest("fixture dependency missing") from exc
+    regeorg_request = (
+        b"POST /proxy.php HTTP/1.1\r\nHost: target.local\r\nX-CMD: CONNECT\r\n"
+        b"X-TARGET: 10.0.0.8\r\nX-PORT: 22\r\nX-Test: one\r\nX-Test: two\r\n"
+        b"X-Pipe: a|b:c\r\nContent-Length: 0\r\n\r\n"
+    )
+    regeorg_response = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+    upgrade_request = (
+        b"GET /ws HTTP/1.1\r\nHost: target.local\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+        b"Sec-WebSocket-Key: Zml4dHVyZS1rZXk=\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    )
+    upgrade_response = (
+        b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+        b"Sec-WebSocket-Accept: Zml4dHVyZS1hY2NlcHQ=\r\n\r\n"
+    )
+    inner = suo5_frame({"ac": b"\x00", "id": b"c1", "h": b"127.0.0.1", "p": b"80"})
+    websocket = b"\x82" + bytes([len(inner)]) + inner
+    packets = [
+        Ether() / IP(src="10.0.0.1", dst="10.0.0.2") / TCP(sport=41000, dport=80, seq=1, flags="PA") / Raw(load=regeorg_request),
+        Ether() / IP(src="10.0.0.2", dst="10.0.0.1") / TCP(sport=80, dport=41000, seq=1, flags="PA") / Raw(load=regeorg_response),
+        Ether() / IP(src="10.0.0.3", dst="10.0.0.2") / TCP(sport=42000, dport=80, seq=1, flags="PA") / Raw(load=upgrade_request),
+        Ether() / IP(src="10.0.0.2", dst="10.0.0.3") / TCP(sport=80, dport=42000, seq=1, flags="PA") / Raw(load=upgrade_response),
+        Ether() / IP(src="10.0.0.2", dst="10.0.0.3") / TCP(sport=80, dport=42000, seq=1 + len(upgrade_response), flags="PA") / Raw(load=websocket),
+    ]
+    wrpcap(str(path), packets)
+
+
 @unittest.skipUnless(shutil.which("tshark"), "TShark integration dependency missing")
 class TSharkAnalyzerTests(unittest.TestCase):
     def test_capture_size_routes_match_contract_boundaries(self) -> None:
@@ -83,6 +126,25 @@ class TSharkAnalyzerTests(unittest.TestCase):
         self.assertEqual(determine_size_route(100 * 1024 * 1024), "stream-index")
         self.assertEqual(determine_size_route(2 * 1024 * 1024 * 1024), "stream-index")
         self.assertEqual(determine_size_route(2 * 1024 * 1024 * 1024 + 1), "inventory-then-slice")
+
+    def test_stream_index_reads_tshark_incrementally_without_payload_materialization(self) -> None:
+        from wiretoutetu_core.analyzer import analyze_capture
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "http.pcap"
+            build_http_fixture(capture)
+            with mock.patch("wiretoutetu_core.analyzer.determine_size_route", return_value="stream-index"), mock.patch(
+                "wiretoutetu_core.analyzer.extract_packets", side_effect=AssertionError("buffered backend used")
+            ):
+                result = analyze_capture(capture, case_dir=root / "case", sidecars=[])
+
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(result["summary"]["size_route"], "stream-index")
+            self.assertFalse(result["summary"]["payloads_materialized"])
+            self.assertEqual(result["counts"]["flows"], 1)
+            self.assertEqual(result["counts"]["transactions"], 0)
+            self.assertIn("proto.http1", result["routes"]["selected_plugins"])
 
     def test_pcap_pcapng_cap_and_gzip_inputs(self) -> None:
         from wiretoutetu_core.analyzer import analyze_capture
@@ -121,6 +183,9 @@ class TSharkAnalyzerTests(unittest.TestCase):
             self.assertIn("proto.http1", result["routes"]["selected_plugins"])
 
             state = result["state"]
+            tooling = state.read_manifest()["tooling"]
+            self.assertIn(tooling["platform_route"], {"windows", "linux", "wsl"})
+            self.assertRegex(tooling["tools"]["tshark"]["version"], r"^4\.")
             transactions = state.query_records("transactions")["items"]
             objects = state.query_records("objects")["items"]
             self.assertEqual(transactions[0]["request"]["uri"], "/flag.txt")
@@ -180,6 +245,87 @@ class TSharkAnalyzerTests(unittest.TestCase):
             self.assertEqual(event["family"], "behinder")
             self.assertEqual(Path(event["output"]["path"]).read_bytes(), plain)
             self.assertEqual(first["counts"]["webshell_events"], 0)
+
+            decoded_path = Path(event["output"]["path"])
+            with mock.patch("wiretoutetu_core.analyzer.extract_packets", side_effect=AssertionError("inventory reran")):
+                third = analyze_capture(capture, case_dir=root / "case", sidecars=[])
+            self.assertEqual(third["counts"]["webshell_events"], 0)
+            self.assertFalse(decoded_path.exists())
+
+    def test_existing_case_rejects_a_different_capture(self) -> None:
+        from wiretoutetu_core.analyzer import analyze_capture
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first_capture = root / "first.pcap"
+            second_capture = root / "second.pcap"
+            build_http_fixture(first_capture)
+            build_udp_dns_icmp_fixture(second_capture)
+            analyze_capture(first_capture, case_dir=root / "case", sidecars=[])
+
+            with self.assertRaisesRegex(ValueError, "bound to a different capture"):
+                analyze_capture(second_capture, case_dir=root / "case", sidecars=[])
+
+    def test_invalid_webshell_sidecars_become_failure_records(self) -> None:
+        from wiretoutetu_core.analyzer import analyze_capture
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "behinder.pcap"
+            build_behinder_post_fixture(capture)
+            invalid_json = root / "broken.json"
+            invalid_json.write_text("{broken", encoding="utf-8")
+            invalid_shape = root / "shape.json"
+            invalid_shape.write_text("[]", encoding="utf-8")
+            invalid_match = root / "match.json"
+            invalid_match.write_text(json.dumps({"webshell_profiles": [{
+                "family": "behinder", "tcp_stream": "not-an-integer", "uri_regex": "[",
+            }]}), encoding="utf-8")
+            first = analyze_capture(
+                capture, case_dir=root / "case-json", sidecars=[invalid_json, invalid_shape, invalid_match]
+            )
+            self.assertTrue(any("sidecar JSON" in item["message"] for item in first["errors"]))
+            self.assertTrue(any("sidecar structure" in item["message"] for item in first["errors"]))
+            self.assertTrue(any("profile match failed" in item["message"] for item in first["errors"]))
+
+            invalid_key = root / "invalid-key.json"
+            invalid_key.write_text(json.dumps({"webshell_profiles": [{
+                "family": "behinder", "tcp_stream": 0, "direction": "request",
+                "cipher": "aes-ecb", "wrapper": "raw", "key_hex": "not-hex",
+            }]}), encoding="utf-8")
+            second = analyze_capture(capture, case_dir=root / "case-key", sidecars=[invalid_key])
+            self.assertTrue(any("profile decode failed" in item["message"] for item in second["errors"]))
+
+    def test_real_pcap_routes_regeorg_headers_and_websocket_suo5_payload(self) -> None:
+        from wiretoutetu_core.analyzer import analyze_capture
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "tunnels.pcap"
+            build_tunnel_fixture(capture)
+            sidecar = root / "profiles.json"
+            sidecar.write_text(json.dumps({"webshell_profiles": [
+                {"family": "regeorg", "tcp_stream": 0, "direction": "request"},
+                {"family": "suo5", "tcp_stream": 1, "direction": "payload"},
+            ]}), encoding="utf-8")
+
+            result = analyze_capture(capture, case_dir=root / "case", sidecars=[sidecar])
+
+            events = result["state"].query_records("webshell", limit=20)["items"]
+            http_transactions = [
+                item for item in result["state"].query_records("evidence", limit=100)["items"]
+                if item.get("protocol") == "http/1.x" and item.get("request", {}).get("uri") == "/proxy.php"
+            ]
+            headers = http_transactions[0]["request"]["headers"]
+            regeorg = next(item for item in events if item["family"] == "regeorg")
+            suo5 = next(item for item in events if item["family"] == "suo5")
+            self.assertEqual(headers["X-Test"], ["one", "two"])
+            self.assertEqual(headers["X-Pipe"], ["a|b:c"])
+            self.assertEqual(regeorg["details"]["operation"], "connect")
+            self.assertEqual(regeorg["details"]["target"], {"host": "10.0.0.8", "port": 22})
+            self.assertEqual(suo5["details"]["action"], "create")
+            self.assertEqual(suo5["details"]["target"], {"host": "127.0.0.1", "port": 80})
+            self.assertFalse(any(item.get("family") == "suo5" for item in result["errors"]))
 
 
 if __name__ == "__main__":

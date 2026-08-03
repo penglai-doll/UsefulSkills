@@ -12,6 +12,7 @@ from typing import Any
 
 from .case_state import CaseState
 from .contracts import stable_evidence_id
+from .tshark_backend import FIELD_AGGREGATOR
 
 
 def _integer(value: str) -> int | None:
@@ -29,11 +30,15 @@ def _float(value: str) -> float | None:
 
 
 def _payload(row: dict[str, str]) -> bytes:
-    value = (row.get("data.data") or row.get("tcp.payload") or "").replace(":", "")
-    if not value or len(value) % 2 or not re.fullmatch(r"[0-9a-fA-F]+", value):
+    return _hex_field(row.get("data.data") or row.get("tcp.payload") or "")
+
+
+def _hex_field(value: str) -> bytes:
+    compact = value.replace(":", "").replace(FIELD_AGGREGATOR, "")
+    if not compact or len(compact) % 2 or not re.fullmatch(r"[0-9a-fA-F]+", compact):
         return b""
     try:
-        return bytes.fromhex(value)
+        return bytes.fromhex(compact)
     except ValueError:
         return b""
 
@@ -57,7 +62,7 @@ def _write_object(
     object_id = stable_evidence_id("OBJ", {"source_transaction": source_transaction, "sha256": digest})
     safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(filename).name).strip("._") or "object.bin"
     output = state.root / "objects" / f"{object_id}_{safe}"
-    output.write_bytes(data)
+    state.write_artifact(output, data, owner="inventory")
     return {
         "id": object_id,
         "source_transaction": source_transaction,
@@ -155,14 +160,22 @@ def extract_protocol_records(
                 key: value for key, value in row.items()
                 if value and key.startswith(("websocket.", "smb2.", "mysql.", "redis.", "mongo.", "rtp.", "wlan.", "socks.", "quic.", "http3."))
             }
-            raw = _payload(row)
-            transactions.append({
+            raw = _hex_field(row.get("websocket.payload", "")) if normalized == "websocket" else _payload(row)
+            transaction = {
                 "id": _txn_id(capture_sha256, normalized, row, discriminator), "protocol": normalized,
                 "transport_index": {"tcp_stream": _integer(row.get("tcp.stream", "")), "udp_stream": _integer(row.get("udp.stream", "")), "substream": _integer(row.get("http3.stream_id", ""))},
                 "frame": frame, "time": timestamp, "fields": detail,
                 "payload_sha256": hashlib.sha256(raw).hexdigest() if raw else None, "payload_length": len(raw),
                 "completeness": "complete" if normalized not in {"quic", "http3", "rdp", "wlan"} else "unknown",
-            })
+            }
+            if normalized == "websocket" and raw:
+                payload_path = state.root / "streams" / f"{transaction['id']}-payload.bin"
+                state.write_artifact(payload_path, raw, owner="inventory")
+                transaction["payload"] = {
+                    "time": timestamp,
+                    "body": {"path": str(payload_path.resolve()), "size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()},
+                }
+            transactions.append(transaction)
 
     for stream, data in ftp_data_streams.items():
         if not data:

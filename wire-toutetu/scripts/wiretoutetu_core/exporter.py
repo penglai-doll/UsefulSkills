@@ -13,6 +13,14 @@ from typing import Any
 from .case_state import CaseState, sha256_file
 
 
+def _register_case_export(state: CaseState, path: Path) -> None:
+    try:
+        path.relative_to(state.root)
+    except ValueError:
+        return
+    state.register_generated(path, owner="export")
+
+
 def export_markdown(state: CaseState, output: str | Path) -> dict[str, Any]:
     summary = state.query_records("summary", limit=1)["items"]
     events = state.query_records("timeline", limit=500)["items"]
@@ -31,24 +39,40 @@ def export_markdown(state: CaseState, output: str | Path) -> dict[str, Any]:
     path = Path(output).resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _register_case_export(state, path)
     return {"status": "verified", "path": str(path), "sha256": sha256_file(path)}
 
 
-def _bundle_files(state: CaseState) -> list[Path]:
+def _bundle_files(state: CaseState, *, extra_excluded: set[Path] | None = None) -> list[Path]:
     manifest = state.read_manifest()
     excluded = {Path(manifest["capture"]["path"]).resolve()}
     excluded.update(Path(item["path"]).resolve() for item in manifest["sidecars"])
-    files = []
-    for path in state.root.rglob("*"):
-        if path.is_file() and path.resolve() not in excluded:
-            files.append(path)
+    excluded.update(path.resolve() for path in (extra_excluded or set()))
+    files: list[Path] = []
+    for item in state.generated_files():
+        relative = PurePosixPath(item["path"])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"unsafe generated artifact path: {item['path']}")
+        path = state.root.joinpath(*relative.parts)
+        if path.resolve() in excluded:
+            continue
+        if path.is_symlink():
+            raise ValueError(f"bundle source must not be a link: {path}")
+        if not path.is_file():
+            raise FileNotFoundError(f"registered bundle artifact is missing: {path}")
+        resolved = path.resolve()
+        try:
+            resolved.relative_to(state.root)
+        except ValueError as exc:
+            raise ValueError(f"bundle source escapes case root: {path}") from exc
+        files.append(path)
     return sorted(files, key=lambda path: path.relative_to(state.root).as_posix())
 
 
 def export_bundle(state: CaseState, output: str | Path) -> dict[str, Any]:
     destination = Path(output).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    files = _bundle_files(state)
+    files = _bundle_files(state, extra_excluded={destination})
     hashes = {path.relative_to(state.root).as_posix(): sha256_file(path) for path in files}
     fd, temporary = tempfile.mkstemp(prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent)
     os.close(fd)
@@ -72,6 +96,7 @@ def export_bundle(state: CaseState, output: str | Path) -> dict[str, Any]:
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+    _register_case_export(state, destination)
     return {
         "status": "verified",
         "path": str(destination),

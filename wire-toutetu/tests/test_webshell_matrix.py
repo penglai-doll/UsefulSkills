@@ -25,6 +25,13 @@ def pad_encrypt(data: bytes, key: bytes) -> bytes:
     return encryptor.update(padded) + encryptor.finalize()
 
 
+def pad_encrypt_cbc(data: bytes, key: bytes) -> bytes:
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(data) + padder.finalize()
+    encryptor = Cipher(algorithms.AES(key), modes.CBC(b"\x00" * 16)).encryptor()
+    return encryptor.update(padded) + encryptor.finalize()
+
+
 def cycle_xor(data: bytes, key: bytes) -> bytes:
     return bytes(value ^ key[index % len(key)] for index, value in enumerate(data))
 
@@ -60,8 +67,8 @@ class WebShellAcceptanceMatrixTests(unittest.TestCase):
         variants = {
             "java-aes-raw": pad_encrypt(plain, key),
             "java-aes-base64": base64.b64encode(pad_encrypt(plain, key)),
-            "csharp-aes-raw": pad_encrypt(plain, key),
-            "csharp-aes-base64": base64.b64encode(pad_encrypt(plain, key)),
+            "csharp-aes-cbc-raw": pad_encrypt_cbc(plain, key),
+            "csharp-aes-cbc-base64": base64.b64encode(pad_encrypt_cbc(plain, key)),
             "php-xor-raw": cycle_xor(plain, key),
             "php-xor-base64": base64.b64encode(cycle_xor(plain, key)),
         }

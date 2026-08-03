@@ -61,6 +61,45 @@ class ExperienceExportCleanupTests(unittest.TestCase):
                 self.assertIn("manifest.sha256.json", archive.namelist())
                 self.assertNotIn("source.pcap", archive.namelist())
 
+    def test_bundle_does_not_pack_an_existing_destination_inside_case(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+        from wiretoutetu_core.exporter import export_bundle
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "source.pcap"
+            capture.write_bytes(b"original")
+            state = CaseState.create(root / "case", capture, [])
+            state.write_records("summary", [{"completeness": "complete"}])
+            bundle = state.root / "exports" / "case.zip"
+            bundle.parent.mkdir()
+            bundle.write_bytes(b"old bundle that must not be nested")
+
+            export_bundle(state, bundle)
+
+            with zipfile.ZipFile(bundle) as archive:
+                self.assertNotIn("exports/case.zip", archive.namelist())
+
+    def test_bundle_only_contains_registered_generated_files(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+        from wiretoutetu_core.exporter import export_bundle
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "source.pcap"
+            capture.write_bytes(b"original")
+            state = CaseState.create(root / "case", capture, [])
+            state.write_records("summary", [{"completeness": "complete"}])
+            unrelated = state.root / "unrelated-secret.txt"
+            unrelated.write_text("must stay local", encoding="utf-8")
+            bundle = root / "case.zip"
+
+            export_bundle(state, bundle)
+
+            with zipfile.ZipFile(bundle) as archive:
+                self.assertNotIn("unrelated-secret.txt", archive.namelist())
+            self.assertTrue(unrelated.is_file())
+
     def test_cleanup_preserves_original_inputs_even_inside_case(self) -> None:
         from wiretoutetu_core.case_state import CaseState
         from wiretoutetu_core.cleanup import cleanup_case
@@ -79,6 +118,66 @@ class ExperienceExportCleanupTests(unittest.TestCase):
             self.assertEqual(capture.read_bytes(), b"original")
             self.assertFalse((case / "records" / "flows.jsonl").exists())
             self.assertIn(str(capture.resolve()), result["preserved_inputs"])
+
+    def test_cleanup_preserves_unregistered_file_added_after_case_creation(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+        from wiretoutetu_core.cleanup import cleanup_case
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "source.pcap"
+            capture.write_bytes(b"original")
+            state = CaseState.create(root / "case", capture, [])
+            state.write_records("flows", [{"id": "FLOW-1"}])
+            unrelated = state.root / "unrelated.txt"
+            unrelated.write_text("preserve", encoding="utf-8")
+
+            cleanup_case(state.root)
+
+            self.assertEqual(unrelated.read_text(encoding="utf-8"), "preserve")
+
+    def test_cleanup_rejects_tampered_ledger_path_traversal(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+        from wiretoutetu_core.cleanup import cleanup_case
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "source.pcap"
+            capture.write_bytes(b"original")
+            outside = root / "outside.txt"
+            outside.write_text("preserve", encoding="utf-8")
+            state = CaseState.create(root / "case", capture, [])
+            ledger = json.loads(state.generated_ledger_path.read_text(encoding="utf-8"))
+            ledger["files"].insert(0, {"path": "../outside.txt", "owner": "inventory"})
+            state.generated_ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "inside the case root"):
+                cleanup_case(state.root)
+            self.assertEqual(outside.read_text(encoding="utf-8"), "preserve")
+
+    def test_exports_inside_case_are_registered_and_removed_by_cleanup(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+        from wiretoutetu_core.cleanup import cleanup_case
+        from wiretoutetu_core.exporter import export_bundle, export_markdown
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "source.pcap"
+            capture.write_bytes(b"original")
+            state = CaseState.create(root / "case", capture, [])
+            state.write_records("summary", [{"completeness": "complete"}])
+            markdown = state.root / "exports" / "report.md"
+            bundle = state.root / "exports" / "case.zip"
+
+            export_markdown(state, markdown)
+            export_bundle(state, bundle)
+            registered = {item["path"] for item in state.generated_files()}
+
+            self.assertIn("exports/report.md", registered)
+            self.assertIn("exports/case.zip", registered)
+            cleanup_case(state.root)
+            self.assertFalse(markdown.exists())
+            self.assertFalse(bundle.exists())
 
 
 if __name__ == "__main__":

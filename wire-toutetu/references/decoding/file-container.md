@@ -3,7 +3,7 @@ knowledge_id: decoding.file-container
 title: 文件魔数与容器
 signals: [magic, zip, pdf, pe, elf]
 read_when: 输出可能是文件或归档时。
-support_status: verified-extract
+support_status: best-effort
 ---
 
 # 文件魔数与容器
@@ -14,12 +14,12 @@ support_status: verified-extract
 
 ## 版本矩阵
 
-- 当前等级：`verified-extract`；只有实际夹具通过才晋级。
+- 当前等级：`best-effort`；只有实际夹具通过才晋级。
 - 先读取 `preflight` 的平台、TShark 版本和字段能力；4.4/4.6 差异走动态探测。
 
 ## 观察特征
 
-检查 PNG/ZIP/GZIP/PDF/MZ/ELF/RAR/SQLite 头与容器目录。
+?? PNG/ZIP/GZIP/PDF/MZ/ELF/RAR/SQLite ?????????????????????
 
 ## 反例
 
@@ -27,7 +27,7 @@ support_status: verified-extract
 
 ## 提取方法
 
-只读落盘、SHA-256、列目录；可执行内容仅静态检查。
+??????? SHA-256??????????????????? best-effort?
 
 ## 解码状态机
 
@@ -39,7 +39,7 @@ support_status: verified-extract
 
 ## 夹具
 
-无独立夹具；维持当前分级。
+????????????????????????????
 
 ## 来源
 

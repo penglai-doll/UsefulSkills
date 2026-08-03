@@ -13,6 +13,17 @@ sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
 
 class DecodingTests(unittest.TestCase):
+    def test_invalid_gcm_tag_becomes_failed_decode_record(self) -> None:
+        from wiretoutetu_core.decoding import decode_one
+
+        output, record = decode_one(
+            b"ciphertext-with-bad-tag", "aes-gcm",
+            parameters={"key": b"k" * 16, "nonce": b"n" * 12}, parameter_source="fixture",
+        )
+
+        self.assertIsNone(output)
+        self.assertEqual(record["status"], "failed")
+        self.assertIn("InvalidTag", record["error"])
     def test_multilayer_url_base64_gzip_chain_records_hashes(self) -> None:
         from wiretoutetu_core.decoding import decode_chain
 

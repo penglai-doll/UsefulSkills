@@ -12,6 +12,32 @@ sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
 
 class CaseStateTests(unittest.TestCase):
+    def test_create_rejects_nonempty_directory_with_unrelated_files(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "sample.pcap"
+            capture.write_bytes(b"fixture")
+            case = root / "case"
+            case.mkdir()
+            (case / "unrelated.txt").write_text("keep", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "unrelated pre-existing content"):
+                CaseState.create(case, capture, [])
+
+    def test_create_rejects_input_colliding_with_reserved_case_state(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+
+        with tempfile.TemporaryDirectory() as tmp:
+            case = Path(tmp) / "case"
+            case.mkdir()
+            capture = case / "case.json"
+            capture.write_bytes(b"original capture")
+
+            with self.assertRaisesRegex(ValueError, "collides with reserved case state"):
+                CaseState.create(case, capture, [])
+
     def test_case_manifest_tracks_inputs_without_copying_them(self) -> None:
         from wiretoutetu_core.case_state import CaseState, sha256_file
 
@@ -81,6 +107,51 @@ class CaseStateTests(unittest.TestCase):
             self.assertEqual(len(result["items"]), 500)
             self.assertIsNotNone(result["next_cursor"])
             self.assertLessEqual(result["returned_bytes"], 4 * 1024 * 1024)
+
+    def test_query_rejects_one_record_larger_than_byte_cap(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "sample.pcap"
+            capture.write_bytes(b"fixture")
+            state = CaseState.create(root / "case", capture, [])
+            state.write_records("events", [{"id": "EVT-large", "value": "x" * (4 * 1024 * 1024)}])
+
+            with self.assertRaisesRegex(ValueError, "exceeds the 4 MiB query boundary"):
+                state.query_records("events")
+
+    def test_find_record_scans_beyond_first_page(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "sample.pcap"
+            capture.write_bytes(b"fixture")
+            state = CaseState.create(root / "case", capture, [])
+            state.write_records("evidence", [{"id": f"EVT-{index}"} for index in range(80)])
+
+            self.assertEqual(state.find_record("evidence", "EVT-79"), {"id": "EVT-79"})
+            self.assertIsNone(state.find_record("evidence", "EVT-missing"))
+
+    def test_generated_ledger_tracks_owner_and_can_clear_one_stage(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "sample.pcap"
+            capture.write_bytes(b"fixture")
+            state = CaseState.create(root / "case", capture, [])
+            inventory = state.root / "objects" / "inventory.bin"
+            decode = state.root / "objects" / "decode.bin"
+            state.write_artifact(inventory, b"inventory", owner="inventory")
+            state.write_artifact(decode, b"decode", owner="decode")
+
+            removed = state.clear_generated("decode")
+
+            self.assertEqual(removed, [str(decode.resolve())])
+            self.assertTrue(inventory.is_file())
+            self.assertFalse(decode.exists())
 
 
 if __name__ == "__main__":

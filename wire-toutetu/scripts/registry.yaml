@@ -435,6 +435,7 @@
       "webshell.suo5"
     ],
     "fixture_ids": [
+      "pcap.tunnels-suo5-regeorg",
       "txn.suo5-klv"
     ],
     "support_status": "verified-decode"
@@ -460,6 +461,7 @@
       "webshell.regeorg"
     ],
     "fixture_ids": [
+      "pcap.tunnels-suo5-regeorg",
       "txn.regeorg-control"
     ],
     "support_status": "verified-extract"

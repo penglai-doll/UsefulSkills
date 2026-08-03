@@ -136,5 +136,11 @@
     "test_file": "tests/test_webshell_matrix.py",
     "test_name": "test_regeorg_verified_control_sequence_and_counterexample",
     "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "pcap.tunnels-suo5-regeorg",
+    "test_file": "tests/test_tshark_analyzer.py",
+    "test_name": "test_real_pcap_routes_regeorg_headers_and_websocket_suo5_payload",
+    "kind": "generated-real-tshark"
   }
 ]
