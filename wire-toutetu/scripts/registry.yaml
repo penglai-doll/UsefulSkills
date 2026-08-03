@@ -1,0 +1,648 @@
+[
+  {
+    "plugin_id": "proto.tcp_udp",
+    "stage": "inventory",
+    "consumes": [
+      "capture"
+    ],
+    "emits": [
+      "flow"
+    ],
+    "trigger_signals": [
+      "tcp",
+      "udp"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.tcp-udp"
+    ],
+    "fixture_ids": [
+      "pcap.tcp-basic",
+      "pcap.udp-basic"
+    ],
+    "support_status": "verified-extract"
+  },
+  {
+    "plugin_id": "proto.http1",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction",
+      "object"
+    ],
+    "trigger_signals": [
+      "http",
+      "post",
+      "get"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.http1"
+    ],
+    "fixture_ids": [
+      "pcap.http1-basic"
+    ],
+    "support_status": "verified-extract"
+  },
+  {
+    "plugin_id": "proto.http2",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction"
+    ],
+    "trigger_signals": [
+      "http2",
+      "h2"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.http2"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.quic",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction"
+    ],
+    "trigger_signals": [
+      "quic",
+      "http3"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.http3-quic"
+    ],
+    "fixture_ids": [],
+    "support_status": "metadata-only"
+  },
+  {
+    "plugin_id": "proto.dns",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction",
+      "event"
+    ],
+    "trigger_signals": [
+      "dns"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.dns"
+    ],
+    "fixture_ids": [
+      "pcap.dns-basic"
+    ],
+    "support_status": "verified-extract"
+  },
+  {
+    "plugin_id": "proto.icmp",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction",
+      "event"
+    ],
+    "trigger_signals": [
+      "icmp",
+      "icmpv6"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.icmp"
+    ],
+    "fixture_ids": [
+      "pcap.icmp-basic"
+    ],
+    "support_status": "verified-extract"
+  },
+  {
+    "plugin_id": "proto.ftp",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction",
+      "object"
+    ],
+    "trigger_signals": [
+      "ftp",
+      "ftp-data"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.ftp"
+    ],
+    "fixture_ids": [
+      "pcap.ftp-basic"
+    ],
+    "support_status": "verified-extract"
+  },
+  {
+    "plugin_id": "proto.smtp",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction",
+      "object"
+    ],
+    "trigger_signals": [
+      "smtp",
+      "mime"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.smtp"
+    ],
+    "fixture_ids": [
+      "pcap.smtp-basic"
+    ],
+    "support_status": "verified-extract"
+  },
+  {
+    "plugin_id": "proto.tls",
+    "stage": "decode",
+    "consumes": [
+      "flow",
+      "sidecar"
+    ],
+    "emits": [
+      "transaction",
+      "decode"
+    ],
+    "trigger_signals": [
+      "tls",
+      "ssl",
+      "keylog"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.tls"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.usb_hid",
+    "stage": "transactions",
+    "consumes": [
+      "capture"
+    ],
+    "emits": [
+      "transaction",
+      "object"
+    ],
+    "trigger_signals": [
+      "usb",
+      "hid",
+      "keyboard"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.usb-hid"
+    ],
+    "fixture_ids": [
+      "pcap.usb-hid-basic"
+    ],
+    "support_status": "verified-extract"
+  },
+  {
+    "plugin_id": "proto.smb",
+    "stage": "transactions",
+    "consumes": [
+      "flow",
+      "sidecar"
+    ],
+    "emits": [
+      "transaction",
+      "object"
+    ],
+    "trigger_signals": [
+      "smb",
+      "smb2",
+      "smb3"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.smb"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "webshell.behinder",
+    "stage": "webshell",
+    "consumes": [
+      "transaction",
+      "sidecar"
+    ],
+    "emits": [
+      "decode",
+      "event"
+    ],
+    "trigger_signals": [
+      "http",
+      "post",
+      "aes",
+      "xor",
+      "behinder"
+    ],
+    "required_tools": [
+      "cryptography"
+    ],
+    "knowledge_ids": [
+      "webshell.behinder"
+    ],
+    "fixture_ids": [
+      "txn.behinder-v3-aes",
+      "txn.behinder-v4-xor"
+    ],
+    "support_status": "verified-decode"
+  },
+  {
+    "plugin_id": "webshell.godzilla",
+    "stage": "webshell",
+    "consumes": [
+      "transaction",
+      "sidecar"
+    ],
+    "emits": [
+      "decode",
+      "event"
+    ],
+    "trigger_signals": [
+      "http",
+      "post",
+      "aes",
+      "xor",
+      "godzilla"
+    ],
+    "required_tools": [
+      "cryptography"
+    ],
+    "knowledge_ids": [
+      "webshell.godzilla"
+    ],
+    "fixture_ids": [
+      "txn.godzilla-java-aes",
+      "txn.godzilla-csharp-aes",
+      "txn.godzilla-php-xor"
+    ],
+    "support_status": "verified-decode"
+  },
+  {
+    "plugin_id": "webshell.antsword",
+    "stage": "webshell",
+    "consumes": [
+      "transaction"
+    ],
+    "emits": [
+      "decode",
+      "event"
+    ],
+    "trigger_signals": [
+      "http",
+      "post",
+      "base64",
+      "rot13",
+      "antsword"
+    ],
+    "required_tools": [],
+    "knowledge_ids": [
+      "webshell.antsword"
+    ],
+    "fixture_ids": [
+      "txn.antsword-php-default",
+      "txn.antsword-php-base64",
+      "txn.antsword-php-rot13"
+    ],
+    "support_status": "verified-decode"
+  },
+  {
+    "plugin_id": "webshell.chopper",
+    "stage": "webshell",
+    "consumes": [
+      "transaction"
+    ],
+    "emits": [
+      "decode",
+      "event"
+    ],
+    "trigger_signals": [
+      "http",
+      "post",
+      "chopper",
+      "eval"
+    ],
+    "required_tools": [],
+    "knowledge_ids": [
+      "webshell.chopper"
+    ],
+    "fixture_ids": [
+      "txn.chopper-php",
+      "txn.chopper-asp",
+      "txn.chopper-aspx",
+      "txn.chopper-jsp"
+    ],
+    "support_status": "verified-decode"
+  },
+  {
+    "plugin_id": "webshell.weevely",
+    "stage": "webshell",
+    "consumes": [
+      "transaction",
+      "sidecar"
+    ],
+    "emits": [
+      "decode",
+      "event"
+    ],
+    "trigger_signals": [
+      "http",
+      "post",
+      "weevely",
+      "password"
+    ],
+    "required_tools": [],
+    "knowledge_ids": [
+      "webshell.weevely"
+    ],
+    "fixture_ids": [
+      "txn.weevely3-session"
+    ],
+    "support_status": "verified-decode"
+  },
+  {
+    "plugin_id": "webshell.suo5",
+    "stage": "webshell",
+    "consumes": [
+      "transaction"
+    ],
+    "emits": [
+      "decode",
+      "event",
+      "flow"
+    ],
+    "trigger_signals": [
+      "http",
+      "websocket",
+      "suo5",
+      "klv",
+      "xor"
+    ],
+    "required_tools": [],
+    "knowledge_ids": [
+      "webshell.suo5"
+    ],
+    "fixture_ids": [
+      "txn.suo5-klv"
+    ],
+    "support_status": "verified-decode"
+  },
+  {
+    "plugin_id": "tunnel.regeorg",
+    "stage": "webshell",
+    "consumes": [
+      "transaction"
+    ],
+    "emits": [
+      "event",
+      "flow"
+    ],
+    "trigger_signals": [
+      "http",
+      "regeorg",
+      "neoreg",
+      "proxy"
+    ],
+    "required_tools": [],
+    "knowledge_ids": [
+      "webshell.regeorg"
+    ],
+    "fixture_ids": [
+      "txn.regeorg-control"
+    ],
+    "support_status": "verified-extract"
+  },
+  {
+    "plugin_id": "proto.websocket",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction"
+    ],
+    "trigger_signals": [
+      "websocket",
+      "upgrade"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.websocket"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.mysql",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction"
+    ],
+    "trigger_signals": [
+      "mysql"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.databases"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.redis",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction"
+    ],
+    "trigger_signals": [
+      "redis",
+      "resp"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.databases"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.mongodb",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction"
+    ],
+    "trigger_signals": [
+      "mongodb",
+      "mongo"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.databases"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.rtp",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction",
+      "object"
+    ],
+    "trigger_signals": [
+      "rtp",
+      "rtcp"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.rtp"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.rdp",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction"
+    ],
+    "trigger_signals": [
+      "rdp",
+      "tpkt",
+      "x224"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.rdp"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.wifi",
+    "stage": "inventory",
+    "consumes": [
+      "capture",
+      "sidecar"
+    ],
+    "emits": [
+      "flow",
+      "transaction"
+    ],
+    "trigger_signals": [
+      "wlan",
+      "radiotap",
+      "eapol"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.wifi"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  },
+  {
+    "plugin_id": "proto.socks",
+    "stage": "transactions",
+    "consumes": [
+      "flow"
+    ],
+    "emits": [
+      "transaction",
+      "flow"
+    ],
+    "trigger_signals": [
+      "socks",
+      "socks5"
+    ],
+    "required_tools": [
+      "tshark"
+    ],
+    "knowledge_ids": [
+      "protocols.socks"
+    ],
+    "fixture_ids": [],
+    "support_status": "best-effort"
+  }
+]

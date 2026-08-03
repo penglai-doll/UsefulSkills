@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wiretoutetu.local/schemas/case.schema.json",
+  "title": "Case",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "capture",
+    "sidecars",
+    "stages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "capture": {
+      "type": "object"
+    },
+    "sidecars": {
+      "type": "array"
+    },
+    "stages": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

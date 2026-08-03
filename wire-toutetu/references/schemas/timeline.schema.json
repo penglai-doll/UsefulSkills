@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wiretoutetu.local/schemas/timeline.schema.json",
+  "title": "Timeline",
+  "type": "object",
+  "required": [
+    "id",
+    "time",
+    "evidence_ids"
+  ],
+  "properties": {
+    "id": {
+      "pattern": "^EVT-[0-9a-f]{16}$"
+    },
+    "time": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

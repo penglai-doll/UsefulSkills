@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wiretoutetu.local/schemas/evidence.schema.json",
+  "title": "Evidence",
+  "type": "object",
+  "required": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "pattern": "^(FLOW|TXN|OBJ|DEC|EVT|FIND)-[0-9a-f]{16}$"
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}
