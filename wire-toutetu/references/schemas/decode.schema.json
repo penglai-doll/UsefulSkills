@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wiretoutetu.local/schemas/decode.schema.json",
+  "title": "Decode",
+  "type": "object",
+  "required": [
+    "id",
+    "algorithm",
+    "parameter_source",
+    "input_sha256",
+    "output_sha256",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "pattern": "^DEC-[0-9a-f]{16}$"
+    },
+    "algorithm": {
+      "type": "string"
+    },
+    "parameter_source": {
+      "type": "string"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "output_sha256": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "text",
+        "binary",
+        "partial",
+        "failed",
+        "not-attempted"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

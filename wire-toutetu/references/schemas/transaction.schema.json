@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wiretoutetu.local/schemas/transaction.schema.json",
+  "title": "Transaction",
+  "type": "object",
+  "required": [
+    "id",
+    "protocol",
+    "transport_index",
+    "completeness"
+  ],
+  "properties": {
+    "id": {
+      "pattern": "^TXN-[0-9a-f]{16}$"
+    },
+    "protocol": {
+      "type": "string"
+    },
+    "transport_index": {
+      "type": "object"
+    },
+    "completeness": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "truncated",
+        "unknown"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

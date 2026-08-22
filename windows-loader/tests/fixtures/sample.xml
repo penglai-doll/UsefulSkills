@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <server>chat.example.test</server>
+  <account>Alice</account>
+</configuration>

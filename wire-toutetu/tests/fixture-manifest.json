@@ -1,0 +1,146 @@
+[
+  {
+    "fixture_id": "pcap.tcp-basic",
+    "test_file": "tests/test_tshark_analyzer.py",
+    "test_name": "test_real_tshark_extracts_flow_http_transaction_and_object",
+    "kind": "generated-pcap-real-tshark"
+  },
+  {
+    "fixture_id": "pcap.udp-basic",
+    "test_file": "tests/test_tshark_analyzer.py",
+    "test_name": "test_real_tshark_extracts_udp_dns_and_icmp",
+    "kind": "generated-pcap-real-tshark"
+  },
+  {
+    "fixture_id": "pcap.http1-basic",
+    "test_file": "tests/test_tshark_analyzer.py",
+    "test_name": "test_real_tshark_extracts_flow_http_transaction_and_object",
+    "kind": "generated-pcap-real-tshark"
+  },
+  {
+    "fixture_id": "pcap.dns-basic",
+    "test_file": "tests/test_tshark_analyzer.py",
+    "test_name": "test_real_tshark_extracts_udp_dns_and_icmp",
+    "kind": "generated-pcap-real-tshark"
+  },
+  {
+    "fixture_id": "pcap.icmp-basic",
+    "test_file": "tests/test_tshark_analyzer.py",
+    "test_name": "test_real_tshark_extracts_udp_dns_and_icmp",
+    "kind": "generated-pcap-real-tshark"
+  },
+  {
+    "fixture_id": "pcap.ftp-basic",
+    "test_file": "tests/test_protocol_extractors.py",
+    "test_name": "test_dns_icmp_ftp_smtp_usb_and_objects",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "pcap.smtp-basic",
+    "test_file": "tests/test_protocol_extractors.py",
+    "test_name": "test_dns_icmp_ftp_smtp_usb_and_objects",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "pcap.usb-hid-basic",
+    "test_file": "tests/test_protocol_extractors.py",
+    "test_name": "test_dns_icmp_ftp_smtp_usb_and_objects",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.behinder-v3-aes",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_behinder_verified_variants_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.behinder-v4-xor",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_behinder_verified_variants_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.godzilla-java-aes",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_godzilla_verified_variants_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.godzilla-csharp-aes",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_godzilla_verified_variants_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.godzilla-php-xor",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_godzilla_verified_variants_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.antsword-php-default",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_antsword_verified_variants_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.antsword-php-base64",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_antsword_verified_variants_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.antsword-php-rot13",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_antsword_verified_variants_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.chopper-php",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_chopper_language_profiles_and_normal_post_counterexample",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.chopper-asp",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_chopper_language_profiles_and_normal_post_counterexample",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.chopper-aspx",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_chopper_language_profiles_and_normal_post_counterexample",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.chopper-jsp",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_chopper_language_profiles_and_normal_post_counterexample",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.weevely3-session",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_weevely_verified_request_response_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.suo5-klv",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_suo5_verified_klv_actions_and_negative_controls",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "txn.regeorg-control",
+    "test_file": "tests/test_webshell_matrix.py",
+    "test_name": "test_regeorg_verified_control_sequence_and_counterexample",
+    "kind": "synthetic-offline"
+  },
+  {
+    "fixture_id": "pcap.tunnels-suo5-regeorg",
+    "test_file": "tests/test_tshark_analyzer.py",
+    "test_name": "test_real_pcap_routes_regeorg_headers_and_websocket_suo5_payload",
+    "kind": "generated-real-tshark"
+  }
+]

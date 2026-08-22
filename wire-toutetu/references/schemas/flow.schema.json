@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wiretoutetu.local/schemas/flow.schema.json",
+  "title": "Flow",
+  "type": "object",
+  "required": [
+    "id",
+    "transport",
+    "stream",
+    "source",
+    "destination",
+    "completeness"
+  ],
+  "properties": {
+    "id": {
+      "pattern": "^FLOW-[0-9a-f]{16}$"
+    },
+    "transport": {
+      "enum": [
+        "tcp",
+        "udp"
+      ]
+    },
+    "stream": {
+      "type": "integer"
+    },
+    "source": {
+      "type": "object"
+    },
+    "destination": {
+      "type": "object"
+    },
+    "completeness": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "truncated",
+        "unknown"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

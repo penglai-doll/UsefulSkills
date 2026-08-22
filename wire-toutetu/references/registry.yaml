@@ -1,0 +1,819 @@
+[
+  {
+    "knowledge_id": "protocols.tcp-udp",
+    "domain": "protocols",
+    "topic": "tcp-udp",
+    "title": "TCP/UDP 流与重组",
+    "path": "protocols/tcp-udp.md",
+    "signals": [
+      "tcp",
+      "udp",
+      "retransmission",
+      "out_of_order"
+    ],
+    "read_when": "出现 TCP/UDP 或需判断缺段、乱序、重传时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [
+      "pcap.tcp-basic",
+      "pcap.udp-basic"
+    ],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html",
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.http1",
+    "domain": "protocols",
+    "topic": "http1",
+    "title": "HTTP/1.x 深度事务",
+    "path": "protocols/http1.md",
+    "signals": [
+      "http",
+      "get",
+      "post",
+      "chunked",
+      "multipart"
+    ],
+    "read_when": "出现 HTTP/1.x、表单、上传下载或 WebShell 候选时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [
+      "pcap.http1-basic"
+    ],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html",
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.http2",
+    "domain": "protocols",
+    "topic": "http2",
+    "title": "HTTP/2 子流",
+    "path": "protocols/http2.md",
+    "signals": [
+      "http2",
+      "h2",
+      "streamid"
+    ],
+    "read_when": "出现 ALPN h2 或 http2.streamid 时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.http3-quic",
+    "domain": "protocols",
+    "topic": "http3-quic",
+    "title": "HTTP/3 与 QUIC 元数据",
+    "path": "protocols/http3-quic.md",
+    "signals": [
+      "quic",
+      "http3",
+      "dcid",
+      "scid"
+    ],
+    "read_when": "出现 QUIC、HTTP/3 或 UDP/443 时。",
+    "support_status": "metadata-only",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.websocket",
+    "domain": "protocols",
+    "topic": "websocket",
+    "title": "WebSocket 帧",
+    "path": "protocols/websocket.md",
+    "signals": [
+      "websocket",
+      "upgrade",
+      "opcode"
+    ],
+    "read_when": "出现 HTTP Upgrade、opcode 或长连接双向帧时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.dns",
+    "domain": "protocols",
+    "topic": "dns",
+    "title": "DNS 与隧道",
+    "path": "protocols/dns.md",
+    "signals": [
+      "dns",
+      "dns.qry.name",
+      "txt"
+    ],
+    "read_when": "出现 DNS、长子域、TXT 或高频 NXDOMAIN 时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [
+      "pcap.dns-basic"
+    ],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html",
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.icmp",
+    "domain": "protocols",
+    "topic": "icmp",
+    "title": "ICMP/ICMPv6 与隧道",
+    "path": "protocols/icmp.md",
+    "signals": [
+      "icmp",
+      "icmpv6",
+      "echo"
+    ],
+    "read_when": "出现 Echo、自定义 data 或异常长度时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [
+      "pcap.icmp-basic"
+    ],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html",
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.ftp",
+    "domain": "protocols",
+    "topic": "ftp",
+    "title": "FTP/FTP-DATA 对象",
+    "path": "protocols/ftp.md",
+    "signals": [
+      "ftp",
+      "ftp-data",
+      "pasv",
+      "retr",
+      "stor"
+    ],
+    "read_when": "出现 FTP 控制或数据连接时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [
+      "pcap.ftp-basic"
+    ],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html",
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.smtp",
+    "domain": "protocols",
+    "topic": "smtp",
+    "title": "SMTP/MIME 对象",
+    "path": "protocols/smtp.md",
+    "signals": [
+      "smtp",
+      "mime",
+      "mail"
+    ],
+    "read_when": "出现 SMTP、MIME boundary 或附件时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [
+      "pcap.smtp-basic"
+    ],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html",
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.tls",
+    "domain": "protocols",
+    "topic": "tls",
+    "title": "TLS 解密材料",
+    "path": "protocols/tls.md",
+    "signals": [
+      "tls",
+      "ssl",
+      "keylog",
+      "rsa"
+    ],
+    "read_when": "出现 TLS、SSLKEYLOGFILE、RSA 私钥或应用层不可见时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.smb",
+    "domain": "protocols",
+    "topic": "smb",
+    "title": "SMB/SMB3 文件与会话",
+    "path": "protocols/smb.md",
+    "signals": [
+      "smb",
+      "smb2",
+      "smb3"
+    ],
+    "read_when": "出现 SMB 协商、树连接或文件读写时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.databases",
+    "domain": "protocols",
+    "topic": "databases",
+    "title": "MySQL/Redis/MongoDB",
+    "path": "protocols/databases.md",
+    "signals": [
+      "mysql",
+      "redis",
+      "mongodb"
+    ],
+    "read_when": "出现数据库端口或解码字段时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.rtp",
+    "domain": "protocols",
+    "topic": "rtp",
+    "title": "RTP/RTCP 媒体",
+    "path": "protocols/rtp.md",
+    "signals": [
+      "rtp",
+      "rtcp",
+      "ssrc"
+    ],
+    "read_when": "出现 RTP/RTCP 或连续 UDP 媒体时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.rdp",
+    "domain": "protocols",
+    "topic": "rdp",
+    "title": "RDP 控制与元数据",
+    "path": "protocols/rdp.md",
+    "signals": [
+      "rdp",
+      "tpkt",
+      "x224"
+    ],
+    "read_when": "出现 TPKT/X.224、CredSSP 或 RDPUDP 时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.wifi",
+    "domain": "protocols",
+    "topic": "wifi",
+    "title": "IEEE 802.11/WPA",
+    "path": "protocols/wifi.md",
+    "signals": [
+      "wlan",
+      "radiotap",
+      "eapol",
+      "wpa"
+    ],
+    "read_when": "出现 802.11、Radiotap 或 EAPOL 时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.usb-hid",
+    "domain": "protocols",
+    "topic": "usb-hid",
+    "title": "USB/HID 与键鼠恢复",
+    "path": "protocols/usb-hid.md",
+    "signals": [
+      "usb",
+      "hid",
+      "usbhid",
+      "keyboard"
+    ],
+    "read_when": "出现 USBPcap、usbmon 或 HID report 时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [
+      "pcap.usb-hid-basic"
+    ],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html",
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "protocols.socks",
+    "domain": "protocols",
+    "topic": "socks",
+    "title": "SOCKS4/5 控制面",
+    "path": "protocols/socks.md",
+    "signals": [
+      "socks",
+      "socks5",
+      "proxy"
+    ],
+    "read_when": "出现 SOCKS 握手或代理链时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "webshell.behinder",
+    "domain": "webshell",
+    "topic": "behinder",
+    "title": "冰蝎 v2/v3/v4",
+    "path": "webshell/behinder.md",
+    "signals": [
+      "behinder",
+      "aes",
+      "xor",
+      "post"
+    ],
+    "read_when": "POST 高熵、固定路径、AES/XOR 或提供冰蝎 key 时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [
+      "txn.behinder-v3-aes",
+      "txn.behinder-v4-xor"
+    ],
+    "sources": [
+      "https://github.com/rebeyond/Behinder",
+      "https://github.com/Leeyuxun/Webshell_traffic_analysis_tool/releases/tag/v3.0"
+    ]
+  },
+  {
+    "knowledge_id": "webshell.godzilla",
+    "domain": "webshell",
+    "topic": "godzilla",
+    "title": "哥斯拉",
+    "path": "webshell/godzilla.md",
+    "signals": [
+      "godzilla",
+      "aes",
+      "xor",
+      "post"
+    ],
+    "read_when": "出现 pass+key、MD5 定界或哥斯拉 profile 时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [
+      "txn.godzilla-java-aes",
+      "txn.godzilla-csharp-aes",
+      "txn.godzilla-php-xor"
+    ],
+    "sources": [
+      "https://github.com/BeichenDream/Godzilla",
+      "https://github.com/Leeyuxun/Webshell_traffic_analysis_tool/releases/tag/v3.0"
+    ]
+  },
+  {
+    "knowledge_id": "webshell.antsword",
+    "domain": "webshell",
+    "topic": "antsword",
+    "title": "蚁剑",
+    "path": "webshell/antsword.md",
+    "signals": [
+      "antsword",
+      "base64",
+      "rot13",
+      "post"
+    ],
+    "read_when": "出现蚁剑 PHP 编码链、随机前缀或 eval 参数时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [
+      "txn.antsword-php-default",
+      "txn.antsword-php-base64",
+      "txn.antsword-php-rot13"
+    ],
+    "sources": [
+      "https://github.com/AntSwordProject/antSword",
+      "https://github.com/Leeyuxun/Webshell_traffic_analysis_tool/releases/tag/v3.0"
+    ]
+  },
+  {
+    "knowledge_id": "webshell.chopper",
+    "domain": "webshell",
+    "topic": "chopper",
+    "title": "中国菜刀",
+    "path": "webshell/chopper.md",
+    "signals": [
+      "chopper",
+      "eval",
+      "post"
+    ],
+    "read_when": "出现单参数 POST、脚本关键字或响应定界时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [
+      "txn.chopper-php",
+      "txn.chopper-asp",
+      "txn.chopper-aspx",
+      "txn.chopper-jsp"
+    ],
+    "sources": [
+      "https://github.com/Leeyuxun/Webshell_traffic_analysis_tool/releases/tag/v3.0"
+    ]
+  },
+  {
+    "knowledge_id": "webshell.weevely",
+    "domain": "webshell",
+    "topic": "weevely",
+    "title": "Weevely3 ObfPost",
+    "path": "webshell/weevely.md",
+    "signals": [
+      "weevely",
+      "obfpost",
+      "password"
+    ],
+    "read_when": "提供候选密码或发现密码派生定界时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [
+      "txn.weevely3-session"
+    ],
+    "sources": [
+      "https://github.com/epinna/weevely3"
+    ]
+  },
+  {
+    "knowledge_id": "webshell.suo5",
+    "domain": "webshell",
+    "topic": "suo5",
+    "title": "suo5 帧与 KLV",
+    "path": "webshell/suo5.md",
+    "signals": [
+      "suo5",
+      "klv",
+      "xor",
+      "websocket"
+    ],
+    "read_when": "出现 URL-safe Base64 分帧、2 字节 XOR 或 KLV 键时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [
+      "pcap.tunnels-suo5-regeorg",
+      "txn.suo5-klv"
+    ],
+    "sources": [
+      "https://github.com/zema1/suo5"
+    ]
+  },
+  {
+    "knowledge_id": "webshell.regeorg",
+    "domain": "webshell",
+    "topic": "regeorg",
+    "title": "reGeorg/Neo-reGeorg 控制面",
+    "path": "webshell/regeorg.md",
+    "signals": [
+      "regeorg",
+      "neoreg",
+      "x-cmd",
+      "proxy"
+    ],
+    "read_when": "出现 CONNECT/FORWARD/READ/DISCONNECT 头时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [
+      "pcap.tunnels-suo5-regeorg",
+      "txn.regeorg-control"
+    ],
+    "sources": [
+      "https://github.com/sensepost/reGeorg",
+      "https://github.com/L-codes/Neo-reGeorg"
+    ]
+  },
+  {
+    "knowledge_id": "webshell.detection-matrix",
+    "domain": "webshell",
+    "topic": "detection-matrix",
+    "title": "WebShell 反例与检测矩阵",
+    "path": "webshell/detection-matrix.md",
+    "signals": [
+      "webshell",
+      "post",
+      "high-entropy"
+    ],
+    "read_when": "命中多个家族或需排除正常 POST 时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://github.com/Leeyuxun/Webshell_traffic_analysis_tool/releases/tag/v3.0",
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "ctf-patterns.flag-object",
+    "domain": "ctf-patterns",
+    "topic": "flag-object",
+    "title": "Flag 与对象恢复",
+    "path": "ctf-patterns/flag-object.md",
+    "signals": [
+      "flag",
+      "file",
+      "object",
+      "magic"
+    ],
+    "read_when": "用户要求找 flag、文件或恢复对象时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "ctf-patterns.keyboard-mouse",
+    "domain": "ctf-patterns",
+    "topic": "keyboard-mouse",
+    "title": "键鼠轨迹题",
+    "path": "ctf-patterns/keyboard-mouse.md",
+    "signals": [
+      "keyboard",
+      "mouse",
+      "hid"
+    ],
+    "read_when": "USB/HID 抓包需还原输入或轨迹时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "ctf-patterns.blind-sqli-timing",
+    "domain": "ctf-patterns",
+    "topic": "blind-sqli-timing",
+    "title": "盲注与时序",
+    "path": "ctf-patterns/blind-sqli-timing.md",
+    "signals": [
+      "sqli",
+      "sleep",
+      "timing"
+    ],
+    "read_when": "参数呈布尔/时间盲注序列时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "ctf-patterns.dns-icmp-tunnels",
+    "domain": "ctf-patterns",
+    "topic": "dns-icmp-tunnels",
+    "title": "DNS/ICMP 隧道拼接",
+    "path": "ctf-patterns/dns-icmp-tunnels.md",
+    "signals": [
+      "dns-tunnel",
+      "icmp-tunnel"
+    ],
+    "read_when": "标签或 Echo data 呈分片序列时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "ctf-patterns.side-channels",
+    "domain": "ctf-patterns",
+    "topic": "side-channels",
+    "title": "包长/时序/方向侧信道",
+    "path": "ctf-patterns/side-channels.md",
+    "signals": [
+      "side-channel",
+      "packet-length",
+      "timing"
+    ],
+    "read_when": "明文不可见但题目暗示侧信道时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "ctf-patterns.multilayer",
+    "domain": "ctf-patterns",
+    "topic": "multilayer",
+    "title": "多层编码链搜索",
+    "path": "ctf-patterns/multilayer.md",
+    "signals": [
+      "base64",
+      "hex",
+      "gzip",
+      "xor",
+      "rot13"
+    ],
+    "read_when": "载荷呈嵌套编码、压缩或魔数时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "decoding.encoding",
+    "domain": "decoding",
+    "topic": "encoding",
+    "title": "URL/Base64/Hex/ROT13",
+    "path": "decoding/encoding.md",
+    "signals": [
+      "url",
+      "base64",
+      "base64url",
+      "hex",
+      "rot13"
+    ],
+    "read_when": "字段满足编码约束时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "decoding.compression",
+    "domain": "decoding",
+    "topic": "compression",
+    "title": "Gzip/Zlib 与 HTTP 压缩",
+    "path": "decoding/compression.md",
+    "signals": [
+      "gzip",
+      "zlib",
+      "deflate"
+    ],
+    "read_when": "出现压缩魔数或 Content-Encoding 时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "decoding.xor",
+    "domain": "decoding",
+    "topic": "xor",
+    "title": "循环 XOR",
+    "path": "decoding/xor.md",
+    "signals": [
+      "xor",
+      "key",
+      "known-plaintext"
+    ],
+    "read_when": "提供 key、随机 XOR 协议或已知明文时。",
+    "support_status": "verified-decode",
+    "fixture_ids": [],
+    "sources": [
+      "https://github.com/zema1/suo5"
+    ]
+  },
+  {
+    "knowledge_id": "decoding.symmetric",
+    "domain": "decoding",
+    "topic": "symmetric",
+    "title": "AES 对称解密",
+    "path": "decoding/symmetric.md",
+    "signals": [
+      "aes",
+      "cbc",
+      "ecb",
+      "gcm"
+    ],
+    "read_when": "sidecar/profile 指定 AES key/mode/IV/nonce/tag 时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://github.com/rebeyond/Behinder",
+      "https://github.com/BeichenDream/Godzilla"
+    ]
+  },
+  {
+    "knowledge_id": "decoding.file-container",
+    "domain": "decoding",
+    "topic": "file-container",
+    "title": "文件魔数与容器",
+    "path": "decoding/file-container.md",
+    "signals": [
+      "magic",
+      "zip",
+      "pdf",
+      "pe",
+      "elf"
+    ],
+    "read_when": "输出可能是文件或归档时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://hello-ctf.com/hc-misc/pcap/"
+    ]
+  },
+  {
+    "knowledge_id": "tooling.platform-routing",
+    "domain": "tooling",
+    "topic": "platform-routing",
+    "title": "Windows/Linux/WSL 路由",
+    "path": "tooling/platform-routing.md",
+    "signals": [
+      "windows",
+      "linux",
+      "wsl",
+      "preflight"
+    ],
+    "read_when": "开始分析或工具缺失时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "tooling.tshark",
+    "domain": "tooling",
+    "topic": "tshark",
+    "title": "TShark 4.4/4.6 适配",
+    "path": "tooling/tshark.md",
+    "signals": [
+      "tshark",
+      "capinfos",
+      "fields"
+    ],
+    "read_when": "运行解析、字段缺失或对象导出时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "tooling.optional-tools",
+    "domain": "tooling",
+    "topic": "optional-tools",
+    "title": "可选工具适配器",
+    "path": "tooling/optional-tools.md",
+    "signals": [
+      "aircrack",
+      "ffmpeg",
+      "zeek",
+      "scapy"
+    ],
+    "read_when": "题型需要 Wi-Fi、媒体、日志或夹具时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "tooling.large-captures",
+    "domain": "tooling",
+    "topic": "large-captures",
+    "title": "大抓包切分与内存",
+    "path": "tooling/large-captures.md",
+    "signals": [
+      "large-capture",
+      "memory-limit",
+      "slice"
+    ],
+    "read_when": "抓包≥100MiB 或内存限制触发时。",
+    "support_status": "best-effort",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  },
+  {
+    "knowledge_id": "schemas.data-contracts",
+    "domain": "schemas",
+    "topic": "data-contracts",
+    "title": "Case 与证据数据契约",
+    "path": "schemas/data-contracts.md",
+    "signals": [
+      "schema",
+      "flow",
+      "txn",
+      "obj",
+      "dec",
+      "evt",
+      "find"
+    ],
+    "read_when": "编写插件、查询、导出或解释完整性时。",
+    "support_status": "verified-extract",
+    "fixture_ids": [],
+    "sources": [
+      "https://www.wireshark.org/docs/man-pages/tshark.html"
+    ]
+  }
+]

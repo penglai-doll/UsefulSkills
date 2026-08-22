@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wiretoutetu.local/schemas/object.schema.json",
+  "title": "Object",
+  "type": "object",
+  "required": [
+    "id",
+    "source_transaction",
+    "sha256",
+    "size",
+    "extraction_path",
+    "completeness"
+  ],
+  "properties": {
+    "id": {
+      "pattern": "^OBJ-[0-9a-f]{16}$"
+    },
+    "source_transaction": {
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "size": {
+      "type": "integer"
+    },
+    "extraction_path": {
+      "type": "string"
+    },
+    "completeness": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "truncated",
+        "unknown"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

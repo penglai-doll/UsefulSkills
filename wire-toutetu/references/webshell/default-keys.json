@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "verified_on": "2026-08-03",
+  "entries": [
+    {
+      "family": "behinder",
+      "versions": [
+        "v3",
+        "v4-common"
+      ],
+      "category": "common-derived-value",
+      "value_type": "ascii-aes-key",
+      "value": "e45e329feb5d925b",
+      "derivation": "md5(\"rebeyond\")[:16]",
+      "source": "https://github.com/rebeyond/Behinder",
+      "official_default": false
+    },
+    {
+      "family": "godzilla",
+      "versions": [
+        "common"
+      ],
+      "category": "common-derived-value",
+      "value_type": "ascii-aes-or-xor-key",
+      "value": "3c6e0b8a9c15224a",
+      "derivation": "md5(\"key\")[:16]",
+      "source": "https://github.com/BeichenDream/Godzilla",
+      "official_default": false
+    },
+    {
+      "family": "antsword",
+      "versions": [
+        "php-common"
+      ],
+      "category": "candidate-parameter",
+      "value_type": "parameter-name",
+      "value": "ant",
+      "derivation": null,
+      "source": "https://github.com/AntSwordProject/antSword",
+      "official_default": false
+    },
+    {
+      "family": "china-chopper",
+      "versions": [
+        "common"
+      ],
+      "category": "candidate-parameter",
+      "value_type": "parameter-name",
+      "value": "pass",
+      "derivation": null,
+      "source": "https://github.com/Leeyuxun/Webshell_traffic_analysis_tool/releases/tag/v3.0",
+      "official_default": false
+    },
+    {
+      "family": "weevely3",
+      "versions": [
+        "3.x"
+      ],
+      "category": "official-default",
+      "value_type": "password",
+      "value": null,
+      "derivation": "user-supplied at generation; md5(password) partitions channel key/header/trailer",
+      "source": "https://github.com/epinna/weevely3",
+      "official_default": false
+    }
+  ]
+}
