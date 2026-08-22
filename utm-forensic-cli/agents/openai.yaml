@@ -1,0 +1,4 @@
+interface:
+  display_name: "UTM Forensic CLI"
+  short_description: "macOS通过UTM CLI运行只读磁盘取证自动化流程"
+  default_prompt: "Use $utm-forensic-cli to run a read-only disk-image forensic workflow through macOS CLI and an isolated UTM Linux VM."
