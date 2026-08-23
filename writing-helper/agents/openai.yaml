@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Helper"
+  short_description: "让 AI 写作更克制、直接、自然，并在改写时保留原意"
+  default_prompt: "用 $writing-helper 把下面的文字改得更克制、自然、直接，同时保留事实、观点和语气。"
