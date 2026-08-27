@@ -1,11 +1,17 @@
 ---
 name: utm-forensic-cli
-description: Use when an agent must perform read-only disk-image forensics on macOS by controlling an isolated UTM Linux VM through utmctl, the UTM guest agent, or SSH and using Sleuth Kit/libewf/YARA; not for general VM administration, write mounts, or executing recovered samples.
+description: Use when an agent must perform read-only disk-image forensics on macOS by controlling an isolated UTM Linux VM through utmctl, the UTM guest agent, SSH, or AppleScript (when utmctl is TCC-blocked), using Sleuth Kit/libewf/YARA; also covers user-requested evidence simulation boot (booting the seized image itself as a sandboxed, write-blocked UTM VM through a read-only NBD channel with a diff layer); not for general VM administration, write mounts, or executing recovered samples.
 ---
 
-# UTM Forensic CLI v1.0.0
+# Skill: utm-forensic-cli v1.1.0
 
 在 macOS 上把 Agent 当作取证编排器：宿主机负责案例目录、证据登记、UTM 生命周期和结果收集；专用 UTM Linux VM 负责 E01/raw 暴露、只读挂载和 Linux 取证工具。默认不用 GUI，也不把整棵证据目录倾倒进上下文。
+
+v1.1.0 新增（来自实战验证）：
+
+- `utmctl` 被 TCC 拒绝（OSStatus -1743）时的 **AppleScript/osascript 控制通道**（功能等价：list/status/start/stop/execute/push/pull/query ip）。
+- **检材仿真引导**模式：以扣押镜像为磁盘启动专用 UTM VM，经回环 NBD 只读服务器 + 差异层，绕开 App Store 沙盒对 QEMU 的文件访问限制。
+- 配套脚本：`nbd_evidence_server.py`、`nbd_selftest.py`、`make_qcow2_overlay.py`（均实战验证）。
 
 ## Start
 
@@ -14,12 +20,13 @@ description: Use when an agent must perform read-only disk-image forensics on ma
 - `preflight`：只检查宿主机、UTM、证据可读性和工具能力；不启动 VM、不挂载证据。
 - `quick-report`：启动一次隔离的取证 VM，做有边界的分区、文件系统、关键路径和时间线基线，生成证据可追溯的 Markdown 报告。
 - `interactive`：每个分析分支逐步确认，适合不确定目标、超大镜像、定向恢复、YARA 扫描或需要用户决定下一条查询的案件。
+- `simulation-boot`：用户明确要求"以镜像为基础启动仿真环境"时使用——把检材本身作为磁盘引导进一个无网卡、写阻塞的专用 VM。必须先通过 [references/simulation-boot.md](references/simulation-boot.md) 的全部安全门，且宿主机 TSK 基础鉴定并行完成作为兜底。
 
 同时确认或从用户上下文中解析：
 
 1. 证据路径（E01/Ex01、raw/dd/img 或其他镜像）和是否存在分段文件。
 2. 案件输出目录；必须在证据目录之外，优先使用绝对路径。
-3. UTM VM 的完整名称或 UUID；不能凭空猜测。用 `utmctl list` 或用户提供的 UUID 解析。
+3. UTM VM 的完整名称或 UUID；不能凭空猜测。用 `utmctl list` 或 AppleScript（见 UTM control）解析。
 4. 宿主机到 VM 的传输方式：优先可证明只读的共享目录；其次 UTM guest agent；再其次已配置 SSH。不要同时盲试多个传输通道。
 5. Hash 策略：默认建议 `sha256`，但在正式读取大镜像前遵循用户选择 `now`、`later` 或 `skip`，并写入 manifest。
 
@@ -28,10 +35,11 @@ description: Use when an agent must perform read-only disk-image forensics on ma
 ## Core contract
 
 - **证据只读**：原始 E01/分段/raw 永不写入；不执行 `fsck`、`ntfsfix`、自动修复、LVM 激活、LUKS 解锁、RAID 组装或任何 `rw` 挂载。
+- **仿真引导的额外硬性规则**：证据先 `chflags uchg`（内核级写阻塞，验证 EPERM，记录并最终以 SHA-256 复验收尾）；QEMU 一律不直接打开证据文件，唯一通道是 NBD 回环只读服务器；仿真 VM 无任何网卡；仿真写入全部落在案件输出目录的差异层。
 - **证据与输出分离**：所有日志、索引、提取文件和报告写到案例输出目录；不得在证据所在目录创建临时文件。
-- **UTM 是执行面**：默认由 Agent 在 macOS 上调用 `utmctl`，不点击 UTM GUI。优先使用 `--disposable` 启动干净 VM，除非用户要求保留 VM 状态。
+- **UTM 是执行面**：默认由 Agent 在 macOS 上调用 `utmctl`；`utmctl` 被 TCC 拒绝（-1743）时切换到等价的 osascript AppleScript 通道（见 UTM control）。优先使用 `--disposable` 启动干净 VM，除非用户要求保留 VM 状态。
 - **命令可审计**：记录宿主机/VM 命令、UTC 时间、退出码、工具版本、VM 标识、输入路径和输出 artifact 路径；命令输出保存到文件，只把摘要送入上下文。
-- **不执行恢复文件**：对提取的脚本、二进制、宏、服务或容器只做静态检查；不要 `bash`、`python`、`chmod +x`、启动服务或访问可疑网络。
+- **不执行恢复文件**：对提取的脚本、二进制、宏、服务或容器只做静态检查；不要 `bash`、`python`、`chmod +x`、启动服务或访问可疑网络。仿真引导中被查封系统在隔离 VM 内的自发行为属于观察对象，但 Agent 不主动执行从证据恢复的样本。
 - **事实分层**：报告分开 `confirmed`、`derived`、`candidate`、`pending`；文件名、时间戳、字符串或单个 IOC 不能单独升级为入侵结论。
 - **最小上下文**：禁止把完整 `fls -r`、完整日志、全盘字符串或大文件内容直接回传模型；先落盘，再使用 `head`、`rg`、字段过滤、哈希和定向 `icat`。
 - **停止条件**：遇到缺失工具、无法证明只读、Hash 不一致、VM/guest agent 不可信、挂载需要修复或输出空间不足时停止该分支，报告阻塞原因，不绕过检查。
@@ -54,14 +62,23 @@ preflight
   -> targeted-extraction
   -> review-and-report
   -> unmount-and-teardown
+
+simulation-boot（用户明确要求时，与上述 TSK 通道并行）:
+  write-block(chflags uchg)
+  -> nbd-server-start + selftest
+  -> make-simulation-vm (AppleScript, 无网卡)
+  -> boot-and-observe
+  -> user-interacts / agent-investigates
+  -> reset-or-teardown
 ```
 
 详细命令、输出结构和故障路由见：
 
-- [references/workflow.md](references/workflow.md)：端到端流程和 UTM CLI/guest agent/SSH 分支。
+- [references/workflow.md](references/workflow.md)：端到端流程和 UTM CLI/guest agent/SSH/AppleScript 分支。
 - [references/command-matrix.md](references/command-matrix.md)：宿主机与 VM 命令、适用条件和结果保存规则。
+- [references/simulation-boot.md](references/simulation-boot.md)：检材仿真引导的完整架构、安全门、步骤与 NBD 协议要点。
 - [references/report-schema.md](references/report-schema.md)：manifest、artifact、finding 和报告字段。
-- [references/troubleshooting.md](references/troubleshooting.md)：UTM、guest agent、SSH、FUSE、分区和只读挂载故障。
+- [references/troubleshooting.md](references/troubleshooting.md)：UTM、guest agent、SSH、FUSE、分区、只读挂载、TCC/沙盒和仿真引导故障。
 
 ## Preflight
 
@@ -79,6 +96,7 @@ python3 scripts/forensicctl.py preflight <evidence> \
 
 - 证据绝对路径、大小、权限、`file` 类型和可读性。
 - `utmctl`、`img_stat`、`mmls`、`fsstat`、`fls`、`istat`、`icat`、`tsk_recover`、`ewfinfo`、`ewfverify`、`ewfmount`、`ssh`、`scp`、哈希工具的存在性和版本尝试结果。
+- `utmctl` 探测中若出现 `OSStatus error -1743`，preflight 会标记 `tcc_blocked`；此时 UTM 控制改走 AppleScript 通道（功能等价、可审计，命令见 command-matrix）。
 - `utmctl --help` 中是否具备 `list/status/start/stop/exec/file`；`utmctl list/status` 使用超时，避免 UTM GUI/服务未就绪时卡死 Agent。
 - 若开启 `--inspect-image`，保存 `img_stat`、`mmls` 的原始输出到案例目录，模型只读取截断摘要。
 
@@ -106,6 +124,49 @@ utmctl start --hide --disposable <VM>
 utmctl exec --hide <VM> --cmd sh -lc 'id; uname -a'
 utmctl stop --hide --request <VM>
 ```
+
+### TCC 失败时的 AppleScript 通道（v1.1.0）
+
+`utmctl` 依赖 Apple Events，可能被 TCC 拒绝（`OSStatus error -1743`，
+输出仍打印空表头，易误判为"没有 VM"）。同一 shell 里 `osascript` 对
+`com.utmapp.UTM` 的事件通常仍被允许。用前先探测：
+
+```bash
+utmctl list 2>&1 | grep -q "OSStatus error -1743" && echo TCC-BLOCKED
+osascript -e 'tell application id "com.utmapp.UTM" to get version'
+```
+
+等价命令（全部实战验证，完整清单见 command-matrix）：
+
+```bash
+osascript -e 'tell application id "com.utmapp.UTM" to get name of every virtual machine'
+osascript -e 'tell application id "com.utmapp.UTM" to get status of virtual machine "<VM>"'
+osascript -e 'tell application id "com.utmapp.UTM" to start virtual machine "<VM>"'
+osascript -e 'tell application id "com.utmapp.UTM" to stop virtual machine "<VM>"'
+```
+
+注意：`start` 可能返回 AppleEvent 超时 `-1712`（良性，启动仍在进行），以
+`get status` 为准；UTM.app 可能自行重启导致 `-609 连接无效`，重试前重查
+进程与 VM 列表。
+
+### VM 配置的 AppleScript 语法（v1.1.0）
+
+创建与改配置（VM 必须为 stopped）：
+
+```applescript
+make new virtual machine with properties {backend:QEMU, configuration:{name:"...", architecture:"x86_64"}}
+update configuration of virtual machine "<VM>" with {name:"...", architecture:"x86_64", machine:"q35", memory:4096, cpu cores:4, hypervisor:false, uefi:false, network interfaces:{}, drives:{}, displays:{{hardware:"VGA"}}}
+```
+
+- **多词键不加引号**（`cpu cores`、`serial ports`、`network interfaces`、
+  `qemu additional arguments` 是字典术语；加引号即 -1700）。
+- 传 `source`（file）注册驱动器时只写入 `ImageName`（文件名），**不会把
+  文件复制进 `<vm>.utm/Data/`**——需手工复制，否则后续一切 update 报
+  "文件不存在"。
+- 空列表（`drives:{}`、`network interfaces:{}`）用于移除设备。
+- `qemu additional arguments` 是逐参数记录列表：`{{argument string:"-drive"}, {argument string:"..."}}`。
+- 驱动器脚本接口**没有 readOnly 属性**；凡需要"可写体验但证据只读"的
+  场景一律走 NBD 差异层，不得把证据文件直接注册为磁盘。
 
 - guest agent 可用时，优先 `utmctl exec` 执行短命令，`utmctl file push/pull` 传输小型脚本和结果。
 - 大型 E01 不要默认通过 `file push` 复制；优先已验证的只读共享目录。若只能复制，复制后在宿主机和 VM 内分别计算 Hash，并把两者写入 manifest。
@@ -146,6 +207,14 @@ mmls /mnt/ewf/ewf1 > /mnt/case/raw/mmls.txt
 从 `mmls` 输出读取分区的 `Start` sector 和 `Units are in ... sectors`，不要把 `2048` 或 `512` 当成固定值。没有可靠分区起点时，不得继续 `fsstat` 或 mount。
 
 TSK 能否直接读取 E01 取决于本机编译是否带 libewf；以 `img_stat` 成功和输出内容为准，不要仅凭文件后缀判断。VM 内的 EWF 暴露失败时，按 [troubleshooting.md](references/troubleshooting.md) 选择 FUSE 修复或用户批准的 raw 导出回退，不自动安装或改系统。
+
+### 关于宿主机直接挂载（v1.1.0 实测）
+
+macOS 原生不挂载 ext4；`hdiutil attach` 对单分区 ext4 的裸 MBR 镜像报
+"无可装载的文件系统"（加 `-imagekey diskimage-class=CRawDiskImage` 可
+附加设备但依然不可挂）。宿主机上的 ext4 浏览需要 FUSE-T/ext4fuse（安装
+需用户许可），或继续用 TSK/仿真环境通道。宿主机 TSK（mmls/fsstat/fls/
+icat/tsk_recover）对 raw 镜像直接可用，是与 VM 并行的基础鉴定通道。
 
 ## Read-only filesystem analysis
 
@@ -189,20 +258,27 @@ sha256sum /mnt/case/extracted/<safe-name> >> /mnt/case/raw/extracted-sha256.txt
 
 对每个可报告结论，保存 `evidence_id`、来源 artifact、路径或 metadata、命令、Hash/时间、状态和局限。疑似恶意文件只做 `file`、`strings`、Hash、格式/元数据和代码/配置静态审查；动态执行另行进入专门沙箱，不在此 skill 内完成。
 
+`simulation-boot` 的基线观察（网站根目录、自启服务、登录界面形态）作为 `candidate` 记录，与 TSK 通道交叉验证后才可升级。
+
 ## Teardown
 
 收尾顺序：
 
 1. 保存并校验 manifest、命令日志、Hash、报告和失败信息。
 2. 若有 mount，记录 `findmnt` 后卸载；若有 FUSE，使用对应的 `fusermount -u`，不要强杀仍在读取证据的进程。
-3. 关闭 guest 内 staging 访问；不删除原始证据。临时 staging 是否清理要记录路径和动作。
-4. `utmctl stop --request`；若使用 disposable VM，记录其丢弃的是 VM 写层而非证据。
-5. 最后运行输出目录自检，确认报告引用的 artifact 都存在，且没有把全量日志/秘密复制到模型回复中。
+3. 仿真引导收尾：停仿真 VM → 停 NBD 服务器 → 保留或按记录清空差异层 → 完成证据 SHA-256 终验后才 `chflags nouchg`。
+4. 关闭 guest 内 staging 访问；不删除原始证据。临时 staging 是否清理要记录路径和动作。
+5. `utmctl stop --request`；若使用 disposable VM，记录其丢弃的是 VM 写层而非证据。
+6. 最后运行输出目录自检，确认报告引用的 artifact 都存在，且没有把全量日志/秘密复制到模型回复中。
 
 ## Resources
 
-- `scripts/forensicctl.py`：宿主机 preflight 与只读执行计划生成器；运行 `python3 scripts/forensicctl.py --help`。
-- [references/workflow.md](references/workflow.md)：完整状态机和 guest-agent/SSH/共享目录路径。
-- [references/command-matrix.md](references/command-matrix.md)：命令和输出落盘矩阵。
+- `scripts/forensicctl.py`：宿主机 preflight 与只读执行计划生成器；运行 `python3 scripts/forensicctl.py --help`。v1.1.0 起 `utmctl` 探测包含 TCC -1743 检测。
+- `scripts/nbd_evidence_server.py`：检材仿真引导用的回环 NBD 只读服务器（O_RDONLY 基底 + 稀疏差异层 + 位图），先自测后使用。
+- `scripts/nbd_selftest.py`：NBD 服务器线格式自测客户端（QEMU 握手模拟 + 首扇区读取校验）；VM 引导前必跑。
+- `scripts/make_qcow2_overlay.py`：手工构造 qcow2 v3 overlay（backing 只读）；仅适用于 QEMU 可合法读取 backing 路径的环境，沙盒 UTM 下改用 NBD。
+- [references/workflow.md](references/workflow.md)：完整状态机和 guest-agent/SSH/共享目录/AppleScript 路径。
+- [references/command-matrix.md](references/command-matrix.md)：命令和输出落盘矩阵（含 AppleScript 等价命令）。
+- [references/simulation-boot.md](references/simulation-boot.md)：检材仿真引导全流程与 NBD 协议要点。
 - [references/report-schema.md](references/report-schema.md)：案例 manifest、artifact 和 finding 结构。
 - [references/troubleshooting.md](references/troubleshooting.md)：故障分支和停止条件。

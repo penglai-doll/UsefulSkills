@@ -85,6 +85,25 @@ utmctl status --hide "$VM"
 
 `--disposable` 只丢弃 VM 写层，不会让宿主机上的 E01 自动变成安全证据；证据完整性仍须独立 Hash/verify。
 
+### utmctl 被 TCC 拒绝时的 AppleScript 分支（v1.1.0）
+
+症状：`utmctl` 输出 `OSStatus error -1743`（可能仍打印空表头，不要据此
+判断"无 VM"）。验证与切换：
+
+```bash
+utmctl list 2>&1 | grep -q "OSStatus error -1743" && echo TCC-BLOCKED
+osascript -e 'tell application id "com.utmapp.UTM" to get version'   # 探测通道
+osascript -e 'tell application id "com.utmapp.UTM" to get name of every virtual machine'
+osascript -e 'tell application id "com.utmapp.UTM" to get status of virtual machine "'"$VM"'"'
+osascript -e 'with timeout of 600 seconds
+tell application id "com.utmapp.UTM" to start virtual machine "'"$VM"'"
+end timeout'
+```
+
+完整等价命令见 [command-matrix.md](command-matrix.md)。事件错误语义：
+`-1712` 超时通常良性（以 `get status` 为准）；`-609` 表示 UTM.app 自行
+重启过，重查 `pgrep` 与 VM 列表后重试。
+
 ### Guest agent 分支
 
 健康检查：
@@ -213,7 +232,26 @@ sha256sum "/case/extracted/$SAFE_NAME" >> /case/raw/extracted-sha256.txt
 
 时间线候选使用 TSK 导出的时间字段和明确来源；不要只根据 `mtime` 宣称“攻击时间”。
 
-## 8. 收尾
+## 8. 检材仿真引导（simulation-boot，v1.1.0）
+
+用户明确要求"以镜像为基础启动仿真环境"时的并行分支。完整架构、安全门、
+AppleScript 模板和 NBD 协议要点见 [simulation-boot.md](simulation-boot.md)。
+此处只列流程骨架：
+
+1. **写阻塞**：`chflags uchg "$IMAGE"`，用失败的 `touch` 验证，前后 `stat` 记入 manifest。
+2. **宿主机 TSK 基线**（兜底）：mmls/fsstat/fls 先落盘。
+3. **NBD 服务器**：`nohup python3 scripts/nbd_evidence_server.py <image> <diff> <bitmap> <port> &`，
+   随后 `python3 scripts/nbd_selftest.py <port>` 必须通过再继续。
+4. **专用 VM**：AppleScript `make` 最小 VM → 增量 `update configuration`
+   （q35/BIOS/VGA/`network interfaces:{}` 清空网卡）→ NBD 磁盘经
+   `qemu additional arguments` 注入。
+5. **观察**：NBD 日志的 dirty-block 增长、`pgrep QEMULauncher` 的 CPU、
+   UTM `get status`；无 Screen Recording 权限时这是唯一的引导活性信号。
+6. **交互**：用户在 UTM 窗口操作；Agent 的额外结论一律走 TSK 交叉验证。
+7. **收尾**：停 VM → 停服务器 → SHA-256 终验 → （可选）`chflags nouchg`。
+   重置仿真 = 清空 diff+bitmap 后重启 VM。
+
+## 9. 收尾
 
 ```bash
 findmnt -R /mnt/evidence

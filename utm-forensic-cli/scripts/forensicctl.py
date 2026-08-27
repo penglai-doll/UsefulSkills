@@ -255,6 +255,12 @@ def detect_kind(path: Path, file_text: str) -> str:
 
 def vm_probe(utmctl: str, vm: str | None, list_vms: bool, args: argparse.Namespace) -> dict[str, Any]:
     result: dict[str, Any] = {"binary": utmctl, "help": help_probe(utmctl)}
+
+    def _tcc_flag(raw: str) -> bool:
+        # Apple Events denial: OSStatus error -1743 (utmctl prints it and may
+        # still emit an empty table header, which must not be read as "no VMs").
+        return "-1743" in raw
+
     if list_vms:
         probe = run_command([utmctl, "list"], args.timeout)
         raw = (probe.get("stdout", "") or "") + (probe.get("stderr", "") or "")
@@ -262,8 +268,16 @@ def vm_probe(utmctl: str, vm: str | None, list_vms: bool, args: argparse.Namespa
             "returncode": probe.get("returncode"),
             "timed_out": probe.get("timed_out", False),
             "duration_ms": probe.get("duration_ms"),
+            "tcc_blocked": _tcc_flag(raw),
             "summary": truncate(raw, args.summary_limit),
         }
+        if _tcc_flag(raw):
+            result["list"]["note"] = (
+                "utmctl is blocked by TCC (OSStatus -1743); an empty table here "
+                "does NOT mean no VMs exist. Switch to the AppleScript channel: "
+                "osascript -e 'tell application id \"com.utmapp.UTM\" to get name "
+                "of every virtual machine' (see command-matrix.md)."
+            )
     if vm:
         probe = run_command([utmctl, "status", "--hide", vm], args.timeout)
         raw = (probe.get("stdout", "") or "") + (probe.get("stderr", "") or "")
@@ -272,6 +286,7 @@ def vm_probe(utmctl: str, vm: str | None, list_vms: bool, args: argparse.Namespa
             "returncode": probe.get("returncode"),
             "timed_out": probe.get("timed_out", False),
             "duration_ms": probe.get("duration_ms"),
+            "tcc_blocked": _tcc_flag(raw),
             "summary": truncate(raw, args.summary_limit),
         }
     return result

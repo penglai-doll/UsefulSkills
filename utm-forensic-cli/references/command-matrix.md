@@ -12,9 +12,46 @@
 | 宿主机 TSK 交叉验证 | `img_stat <IMAGE>; mmls <IMAGE>` | `raw/host-img-stat.txt`, `raw/host-mmls.txt` |
 | Hash | `shasum -a 256 <IMAGE>` | `raw/host-sha256.txt` |
 | UTM 能力 | `utmctl --help; utmctl help <subcommand>` | `raw/utm-help.txt` |
+| TCC 探测 | `utmctl list 2>&1 \| grep -c "OSStatus error -1743"` | 非 0 即 `tcc_blocked` |
 | VM 状态 | `utmctl status --hide <VM>`，带超时 | `raw/vm-status.txt` |
 
 不要把 `utmctl list` 或 `status` 作为无超时的阻塞命令；UTM.app/后台服务未就绪时可能无输出或卡住。
+
+## AppleScript transport（utmctl 被 TCC 拒绝时，v1.1.0 实战验证）
+
+前置探测：`osascript -e 'tell application id "com.utmapp.UTM" to get version'`。
+
+| 目的 | 命令形状 | 规则 |
+|---|---|---|
+| 列出 VM | `osascript -e 'tell application id "com.utmapp.UTM" to get name of every virtual machine'` | 完整名称从这里取 |
+| 状态 | `... to get status of virtual machine "<VM>"` | stopped/starting/started |
+| 启动 | `osascript -e 'with timeout of 600 seconds
+tell ... to start virtual machine "<VM>"
+end timeout'` | `-1712` 超时良性，以 status 为准 |
+| 停止 | `... to stop virtual machine "<VM>"` | 等价 `--request` |
+| 查询 IP | `... to query ip of virtual machine "<VM>"` | 需 guest agent |
+| guest 执行 | `... to execute virtual machine "<VM>" at "/bin/sh" with arguments {"-c", "..."}` | 需 guest agent；结果对象用 `get result` 读取 |
+| 建配置 | `make new virtual machine with properties {backend:QEMU, configuration:{...}}` | 多词键不加引号 |
+| 改配置 | `update configuration of virtual machine "<VM>" with {...}` | VM 必须 stopped |
+| 推/拉文件 | `push <file> to ... / pull <guest file>` | 需 guest agent，仅小文件 |
+
+AppleScript 配置记录陷阱：`source` 只注册 `ImageName` 不复制文件（需手工
+放进 `<vm>.utm/Data/`）；`drives:{}`/`network interfaces:{}` 清空设备；
+`qemu additional arguments` 为逐参数记录列表；驱动器记录无 readOnly 属性。
+
+## Simulation boot（检材仿真引导，v1.1.0）
+
+详见 [simulation-boot.md](simulation-boot.md)。命令骨架：
+
+| 步骤 | 命令 | artifact |
+|---|---|---|
+| 写阻塞 | `chflags uchg <IMAGE>; touch <IMAGE>`（应 EPERM） | manifest 记录前后 stat |
+| 起服务器 | `nohup python3 scripts/nbd_evidence_server.py <IMAGE> <diff> <bitmap> <port> &` | `logs/nbd-server.log` |
+| 自测 | `python3 scripts/nbd_selftest.py <port>` | 终端输出存 `logs/nbd-selftest.txt` |
+| 建 VM | `make ... configuration:{name, architecture}` 再增量 update | `logs/vm-config-backup.plist` |
+| 注入磁盘 | `qemu additional arguments:{{argument string:"-drive"}, {argument string:"if=none,id=evid0,media=disk,file=nbd:127.0.0.1:<port>,format=raw"}, {argument string:"-device"}, {argument string:"ide-hd,drive=evid0"}}` | config.plist |
+| 观察 | `tail <case>/logs/nbd-server.log; ps -o %cpu,time -p $(pgrep QEMULauncher \| head -1)` | dirty-block 增长 |
+| 终验 | `shasum -a 256 <IMAGE>` 与初始值比对 | `raw/evidence-sha256-verify.txt` |
 
 ## Guest agent transport
 
