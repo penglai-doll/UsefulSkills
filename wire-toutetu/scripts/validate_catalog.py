@@ -111,16 +111,33 @@ def validate() -> list[str]:
     return errors
 
 
+def _regenerate_indexes() -> None:
+    plugins = load_registry(PLUGIN_REGISTRY)
+    knowledge = json.loads(REFERENCE_REGISTRY_PATH.read_text(encoding="utf-8"))
+    outputs = {OUTPUT_PATH: render_scripts_index(plugins)}
+    outputs.update(render_reference_indexes(knowledge))
+    for path, rendered in outputs.items():
+        if not path.is_file() or path.read_text(encoding="utf-8") != rendered:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(rendered, encoding="utf-8")
+            print(f"regenerated: {path}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="validate without writing")
-    parser.parse_args()
+    parser.add_argument("--check", action="store_true", help="fail on index drift instead of regenerating drifted indexes")
+    args = parser.parse_args()
+    if not args.check:
+        try:
+            _regenerate_indexes()
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"index regeneration failed: {exc}")
     errors = validate()
     if errors:
         for error in errors:
             print(error)
         return 1
-    print("catalog is valid")
+    print("catalog is valid" + (" (check mode: no files written)" if args.check else ""))
     return 0
 
 

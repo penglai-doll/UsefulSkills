@@ -42,7 +42,7 @@ def parse(path: str | Path, file_entry: dict[str, Any], limit: int = 10000) -> d
             make_event(
                 timestamp_text=data.get("ts"),
                 source_file=str(path),
-                log_type=file_entry.get("detected_type") or "web_access",
+                log_type=file_entry.get("log_type") or file_entry.get("detected_type") or "web_access",
                 event_type=event_type,
                 actor_ip=data.get("ip"),
                 request_or_action=f"{data.get('method')} {path_text}",

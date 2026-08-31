@@ -50,8 +50,11 @@ python3 scripts/mount_evidence.py <path> --dry-run --case-id <case-id> --json
 
 Required script behavior:
 
-- Support `--json`, `--output-dir`, `--case-id`, `--summary-limit`, and `--hash none|later|md5|sha1|sha256|md5,sha1,sha256`.
+- Both scripts always print compact JSON to stdout; the `--json` flag is accepted for compatibility and matches the default behavior.
+- Support `--output-dir`, `--case-id`, `--summary-limit`, and `--hash none|later|md5|sha1|sha256|md5,sha1,sha256`.
 - `mount_evidence.py` also supports `--dry-run`, `--inspect-json`, `--resume`, and `--triage-level full|fast`.
+- `--resume` reuses the prior inspection (read from `--inspect-json` or `<output-dir>/<case-id>/inspect.json`) instead of re-running inspect: an evidence size mismatch is a fatal blocker, mtime drift or a changed path only produces a warning, and mounts are re-planned from the saved inspection.
+- `--triage-level fast` skips the deep probes mount planning does not need (os profile, panel scan, Docker metadata walk, and the privileged loop probe); `full` runs everything. `--dry-run` reports loop support as unknown instead of probing.
 - Write outputs outside mounted evidence under an absolute `output/linux-loader/<case-id>/` path by default.
 - Use `/mnt/evidence_mount/<case-id>/` only for read-only mount targets unless preflight detects a conflict, then choose a case-specific alternate.
 - Privilege handling is automatic: try root, then `sudo -n true`. If unavailable, emit `blocked=true`, `manual_command`, and `user_choices` (`manual_sudo`, `interactive_sudo`); do not add a user-facing sudo mode or try a bare privileged `mount`.

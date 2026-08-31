@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from .case_state import CaseState, sha256_file
+from .case_state import MAX_QUERY_ITEMS, CaseState, sha256_file
 
 
 def _register_case_export(state: CaseState, path: Path) -> None:
@@ -21,21 +21,38 @@ def _register_case_export(state: CaseState, path: Path) -> None:
     state.register_generated(path, owner="export")
 
 
+def _truncation_note(state: CaseState, collection: str, exported: int) -> str | None:
+    """Explicit incompleteness note when a markdown section was capped."""
+    total = state.count_records(collection)
+    if total > exported:
+        return (
+            f"⚠ 截断：仅导出前 {exported}/{total} 条（分页上限 {MAX_QUERY_ITEMS}），"
+            f"完整数据见 case 目录 records/{collection}.jsonl"
+        )
+    return None
+
+
 def export_markdown(state: CaseState, output: str | Path) -> dict[str, Any]:
     summary = state.query_records("summary", limit=1)["items"]
-    events = state.query_records("timeline", limit=500)["items"]
-    objects = state.query_records("objects", limit=500)["items"]
-    failures = state.query_records("failures", limit=500)["items"]
+    events = state.query_records("timeline", limit=MAX_QUERY_ITEMS)["items"]
+    objects = state.query_records("objects", limit=MAX_QUERY_ITEMS)["items"]
+    failures = state.query_records("failures", limit=MAX_QUERY_ITEMS)["items"]
     lines = ["# WireToutetu 离线流量分析", "", "## 摘要", ""]
     lines.append(f"```json\n{json.dumps(summary[0] if summary else {}, ensure_ascii=False, indent=2)}\n```")
     lines.extend(["", "## 事件链", ""])
     for event in events:
         lines.append(f"- `{event.get('id')}` {event.get('time')}：{event.get('operation')} → {event.get('result')}")
+    if note := _truncation_note(state, "timeline", len(events)):
+        lines.append(note)
     lines.extend(["", "## 恢复对象", ""])
     for item in objects:
         lines.append(f"- `{item.get('id')}` `{item.get('filename')}` SHA-256 `{item.get('sha256')}`")
+    if note := _truncation_note(state, "objects", len(objects)):
+        lines.append(note)
     lines.extend(["", "## 失败与缺口", ""])
     lines.extend(f"- {json.dumps(item, ensure_ascii=False)}" for item in failures)
+    if note := _truncation_note(state, "failures", len(failures)):
+        lines.append(note)
     path = Path(output).resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -40,26 +40,166 @@ def atomic_write_text(destination: Path, contents: str) -> None:
             temporary_path.unlink()
 
 
+LOCK_OWNER_NAME = "owner.json"
+LOCK_STALE_AFTER_SECONDS = 600.0
+LOCK_PERMISSION_RETRY_SECONDS = 10.0
+LOCK_RELEASE_RETRY_SECONDS = 5.0
+
+
+def _pid_is_alive(pid: int) -> bool | None:
+    """Report whether ``pid`` still runs, or None when that cannot be determined.
+
+    Windows must never use ``os.kill`` for probing: it terminates the target.
+    ``_winapi`` provides the same stdlib-only OpenProcess(SYNCHRONIZE) probe
+    without importing a forbidden process bridge such as ctypes.
+    """
+    if pid <= 0:
+        return False
+    try:
+        if os.name == "nt":
+            import _winapi
+
+            synchronize = 0x00100000
+            query_limited = 0x1000
+            wait_timeout = 258
+            access_denied = 5
+            try:
+                handle = _winapi.OpenProcess(synchronize | query_limited, False, pid)
+            except OSError as error:
+                return getattr(error, "winerror", None) == access_denied
+            try:
+                # A process handle signals exactly once, on termination.
+                return _winapi.WaitForSingleObject(handle, 0) == wait_timeout
+            finally:
+                _winapi.CloseHandle(handle)
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+    except (ImportError, AttributeError, OSError):
+        return None
+
+
+def _lock_owner(lock_path: Path) -> dict:
+    try:
+        document = json.loads((lock_path / LOCK_OWNER_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return document if isinstance(document, dict) else {}
+
+
+def _write_lock_owner(lock_path: Path) -> None:
+    # Best effort: a missing owner file simply falls back to age-based staleness.
+    try:
+        atomic_write_text(
+            lock_path / LOCK_OWNER_NAME,
+            json.dumps({"pid": os.getpid(), "created": time.time()}),
+        )
+    except OSError:
+        pass
+
+
+def _lock_is_stale(lock_path: Path) -> bool:
+    """A lock is stale when it is old enough and its owner process is gone."""
+    try:
+        age = max(0.0, time.time() - lock_path.stat().st_mtime)
+    except OSError:
+        return False
+    if age < LOCK_STALE_AFTER_SECONDS:
+        return False
+    pid = _lock_owner(lock_path).get("pid")
+    if not isinstance(pid, int):
+        return True
+    alive = _pid_is_alive(pid)
+    if alive is None:
+        return True
+    return not alive
+
+
+def _reclaim_stale_lock(lock_path: Path) -> bool:
+    """Steal a provably stale lock by renaming it aside (atomic, race-safe)."""
+    if not _lock_is_stale(lock_path):
+        return False
+    victim = lock_path.with_name(lock_path.name + ".stale-" + uuid.uuid4().hex)
+    try:
+        os.rename(lock_path, victim)
+    except OSError:
+        return False
+    deadline = time.monotonic() + LOCK_RELEASE_RETRY_SECONDS
+    while True:
+        try:
+            owner = victim / LOCK_OWNER_NAME
+            try:
+                owner.unlink()
+            except FileNotFoundError:
+                pass
+            victim.rmdir()
+            return True
+        except FileNotFoundError:
+            return True
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                return True
+            time.sleep(0.01)
+        except OSError:
+            return True
+
+
+def _release_lock(lock_path: Path) -> None:
+    """Remove the owner file and lock directory, tolerating Windows races."""
+    deadline = time.monotonic() + LOCK_RELEASE_RETRY_SECONDS
+    while True:
+        try:
+            recorded_pid = _lock_owner(lock_path).get("pid")
+            if isinstance(recorded_pid, int) and recorded_pid != os.getpid():
+                return
+            try:
+                (lock_path / LOCK_OWNER_NAME).unlink()
+            except FileNotFoundError:
+                pass
+            lock_path.rmdir()
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                return
+            time.sleep(0.01)
+
+
 @contextmanager
 def case_mutex(case_dir: Path, wait_seconds: float = 30.0):
-    """Serialize case mutations with a portable, transient lock directory."""
+    """Serialize case mutations with a portable, transient lock directory.
+
+    Windows briefly raises PermissionError from mkdir while a concurrent
+    rmdir leaves the directory in delete-pending state, so that case is
+    retried like FileExistsError instead of escaping to the caller.
+    """
     lock_path = case_dir / ".case-state-lock"
     deadline = time.monotonic() + wait_seconds
+    permission_deadline = time.monotonic() + min(wait_seconds, LOCK_PERMISSION_RETRY_SECONDS)
     while True:
         try:
             lock_path.mkdir()
             break
         except FileExistsError:
+            if _reclaim_stale_lock(lock_path):
+                continue
             if time.monotonic() >= deadline:
                 raise ValueError("case state is busy; retry the mutation")
             time.sleep(0.01)
+        except PermissionError:
+            if time.monotonic() >= permission_deadline:
+                raise
+            time.sleep(0.01)
     try:
+        _write_lock_owner(lock_path)
         yield
     finally:
-        try:
-            lock_path.rmdir()
-        except FileNotFoundError:
-            pass
+        _release_lock(lock_path)
 
 
 def evidence_metadata(
@@ -374,7 +514,7 @@ def main() -> None:
                     record = {"kind": "cleanup", "text": args.text}
                     append_record(args.case_dir / "commands.jsonl", record)
                     items = list(cleanup.get("items", [])) + [record]
-                    shown = items[:50]
+                    shown = items[-50:]
                     total = int(cleanup.get("total_count", 0)) + 1
                     session["cleanup"] = {
                         "items": shown,

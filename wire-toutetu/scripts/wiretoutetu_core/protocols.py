@@ -55,6 +55,19 @@ def _txn_id(capture_sha256: str, protocol: str, row: dict[str, str], discriminat
     )
 
 
+def _transaction_time(transaction: dict[str, Any]) -> float | None:
+    """Best known epoch time for a transaction, so timeline events sort correctly."""
+    for candidate in (
+        (transaction.get("request") or {}).get("time") if isinstance(transaction.get("request"), dict) else None,
+        transaction.get("time"),
+        (transaction.get("response") or {}).get("time") if isinstance(transaction.get("response"), dict) else None,
+        (transaction.get("payload") or {}).get("time") if isinstance(transaction.get("payload"), dict) else None,
+    ):
+        if candidate is not None:
+            return float(candidate)
+    return None
+
+
 def _write_object(
     state: CaseState, *, source_transaction: str, filename: str, data: bytes, completeness: str = "complete"
 ) -> dict[str, Any]:
@@ -85,6 +98,7 @@ def extract_protocol_records(
     ftp_pending: dict[str, deque[dict[str, Any]]] = defaultdict(deque)
     smtp_streams: dict[str, bytearray] = defaultdict(bytearray)
     ftp_data_streams: dict[str, bytearray] = defaultdict(bytearray)
+    ftp_data_times: dict[str, float | None] = {}
 
     for row in packets:
         protocols = set(row.get("frame.protocols", "").split(":"))
@@ -113,6 +127,7 @@ def extract_protocol_records(
             transactions.append({
                 "id": _txn_id(capture_sha256, kind, row, discriminator), "protocol": kind,
                 "transport_index": {"packet": frame, "substream": None},
+                "frame": frame, "time": timestamp,
                 "type": _integer(row.get(f"{kind}.type", "")), "identifier": _integer(row.get("icmp.ident", "")),
                 "sequence": _integer(row.get("icmp.seq", "")), "data_sha256": hashlib.sha256(_payload(row)).hexdigest() if _payload(row) else None,
                 "completeness": "complete",
@@ -126,10 +141,13 @@ def extract_protocol_records(
             txn_id = _txn_id(capture_sha256, "ftp", row, f"{stream}:{frame}")
             transactions.append({
                 "id": txn_id, "protocol": "ftp", "transport_index": {"tcp_stream": _integer(stream), "substream": None},
-                "request": request, "response": {"frame": frame, "code": _integer(row["ftp.response.code"]), "argument": row.get("ftp.response.arg")},
+                "time": timestamp,
+                "request": request, "response": {"frame": frame, "time": timestamp, "code": _integer(row["ftp.response.code"]), "argument": row.get("ftp.response.arg")},
                 "completeness": "complete" if request else "partial",
             })
         if "ftp-data" in protocols or "ftp_data" in protocols:
+            if stream not in ftp_data_times:
+                ftp_data_times[stream] = timestamp
             ftp_data_streams[stream].extend(_payload(row))
 
         if "smtp" in protocols or row.get("smtp.req.command") or row.get("smtp.response.code"):
@@ -138,6 +156,7 @@ def extract_protocol_records(
                 txn_id = _txn_id(capture_sha256, "smtp", row, f"{stream}:{frame}")
                 transactions.append({
                     "id": txn_id, "protocol": "smtp", "transport_index": {"tcp_stream": _integer(stream), "substream": None},
+                    "frame": frame, "time": timestamp,
                     "command": row.get("smtp.req.command") or None, "parameter": row.get("smtp.req.parameter") or None,
                     "response_code": _integer(row.get("smtp.response.code", "")), "response": row.get("smtp.rsp.parameter") or None,
                     "completeness": "complete",
@@ -146,8 +165,9 @@ def extract_protocol_records(
         if "usbhid" in protocols or row.get("usbhid.data"):
             txn_id = _txn_id(capture_sha256, "usb-hid", row, str(frame))
             transactions.append({
-                "id": txn_id, "protocol": "usb-hid",
+                "id": _txn_id(capture_sha256, "usb-hid", row, str(frame)), "protocol": "usb-hid",
                 "transport_index": {"bus": _integer(row.get("usb.bus_id", "")), "device": _integer(row.get("usb.device_address", "")), "endpoint": row.get("usb.endpoint_address") or None},
+                "frame": frame, "time": timestamp,
                 "report_hex": row.get("usbhid.data") or row.get("data.data") or None,
                 "completeness": "complete",
             })
@@ -181,7 +201,7 @@ def extract_protocol_records(
         if not data:
             continue
         txn_id = stable_evidence_id("TXN", {"capture_sha256": capture_sha256, "protocol": "ftp-data", "stream": stream})
-        transactions.append({"id": txn_id, "protocol": "ftp-data", "transport_index": {"tcp_stream": _integer(stream), "substream": None}, "completeness": "complete"})
+        transactions.append({"id": txn_id, "protocol": "ftp-data", "transport_index": {"tcp_stream": _integer(stream), "substream": None}, "time": ftp_data_times.get(stream), "completeness": "complete"})
         objects.append(_write_object(state, source_transaction=txn_id, filename=f"ftp-stream-{stream}.bin", data=bytes(data)))
 
     for stream, raw in smtp_streams.items():
@@ -209,5 +229,5 @@ def extract_protocol_records(
 
     for transaction in transactions:
         event_id = stable_evidence_id("EVT", {"transaction": transaction["id"], "kind": transaction["protocol"]})
-        events.append({"id": event_id, "time": None, "kind": f"{transaction['protocol']}-transaction", "operation": transaction["protocol"], "result": None, "evidence_ids": [transaction["id"]]})
+        events.append({"id": event_id, "time": _transaction_time(transaction), "kind": f"{transaction['protocol']}-transaction", "operation": transaction["protocol"], "result": None, "evidence_ids": [transaction["id"]]})
     return transactions, objects, events

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import struct
 import sys
+import tempfile
 import unittest
 import zlib
 from pathlib import Path
@@ -25,6 +27,36 @@ def aes_ecb_encrypt(plain: bytes, key: bytes) -> bytes:
 
 def xor(data: bytes, key: bytes) -> bytes:
     return bytes(value ^ key[index % len(key)] for index, value in enumerate(data))
+
+
+def suo5_frame(fields: dict[str, bytes]) -> bytes:
+    klv = b"".join(bytes([len(key)]) + key.encode() + struct.pack(">I", len(value)) + value for key, value in fields.items())
+    obs = b"\x23\x42"
+    encoded = base64.urlsafe_b64encode(xor(klv, obs)).rstrip(b"=")
+    length = struct.pack(">I", len(encoded))
+    header = base64.urlsafe_b64encode(obs + xor(length, obs)).rstrip(b"=")
+    return header + encoded
+
+
+def http_transaction(txn_id: str, tcp_stream: int, body: bytes, root: Path, epoch: float = 1.0) -> dict:
+    body_path = root / f"{txn_id}-request.bin"
+    body_path.write_bytes(body)
+    return {
+        "id": txn_id,
+        "protocol": "http/1.x",
+        "transport_index": {"tcp_stream": tcp_stream, "substream": None},
+        "request": {
+            "packet": 1,
+            "time": epoch,
+            "method": "POST",
+            "uri": "/tunnel",
+            "host": "target.local",
+            "headers": {},
+            "body": {"path": str(body_path), "size": len(body), "sha256": hashlib.sha256(body).hexdigest()},
+        },
+        "response": {"packet": 2, "time": epoch + 1.0, "status": 200, "content_type": ""},
+        "completeness": "complete",
+    }
 
 
 class WebShellDecoderTests(unittest.TestCase):
@@ -118,6 +150,72 @@ class WebShellDecoderTests(unittest.TestCase):
         )
         self.assertEqual(result["operation"], "connect")
         self.assertEqual(result["target"], {"host": "10.0.0.8", "port": 3389})
+
+    def test_suo5_http_transaction_decodes_request_body_instead_of_skipping(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+        from wiretoutetu_core.webshell_pipeline import apply_webshell_profiles
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "capture.pcap"
+            capture.write_bytes(b"capture")
+            state = CaseState.create(root / "case", capture, [])
+            frame = suo5_frame({"ac": b"\x00", "id": b"c1", "h": b"127.0.0.1", "p": b"80"})
+            sidecar = root / "profile.json"
+            sidecar.write_text(json.dumps({"webshell_profiles": [
+                {"family": "suo5", "tcp_stream": 7, "direction": "request"},
+                {"family": "suo5", "tcp_stream": 8, "direction": "request"},
+            ]}), encoding="utf-8")
+            transactions = [
+                http_transaction("TXN-http-suo5", 7, frame, root),
+                http_transaction("TXN-http-plain", 8, b"ordinary post body", root, epoch=2.0),
+            ]
+
+            decodes, events, failures = apply_webshell_profiles(state, transactions, [sidecar])
+
+            self.assertEqual(failures, [])
+            self.assertEqual(len(events), 2, "HTTP-transport suo5 must not be silently skipped")
+            good, bad = events
+            self.assertEqual(good["transaction_id"], "TXN-http-suo5")
+            self.assertEqual(good["details"]["action"], "create")
+            self.assertEqual(good["details"]["target"], {"host": "127.0.0.1", "port": 80})
+            self.assertEqual(bad["transaction_id"], "TXN-http-plain")
+            self.assertEqual(bad["status"], "failed")
+            self.assertIn("suo5", bad["details"]["error"])
+            self.assertEqual(decodes, [])
+
+    def test_output_artifact_is_named_after_this_transactions_decode_id(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+        from wiretoutetu_core.contracts import stable_evidence_id
+        from wiretoutetu_core.webshell_pipeline import apply_webshell_profiles
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "capture.pcap"
+            capture.write_bytes(b"capture")
+            state = CaseState.create(root / "case", capture, [])
+            key = b"e45e329feb5d925b"
+            encrypted = aes_ecb_encrypt(b'{"cmd":"whoami"}', key)
+            plain = b"@eval($_POST[x]);"
+            sidecar = root / "profile.json"
+            sidecar.write_text(json.dumps({"webshell_profiles": [
+                {"family": "behinder", "tcp_stream": 0, "direction": "request", "cipher": "aes-ecb", "wrapper": "raw", "key": key.decode()},
+                {"family": "antsword", "tcp_stream": 1, "direction": "request", "chain": []},
+            ]}), encoding="utf-8")
+            transactions = [
+                http_transaction("TXN-first", 0, encrypted, root),
+                http_transaction("TXN-second", 1, plain, root, epoch=2.0),
+            ]
+
+            decodes, events, _failures = apply_webshell_profiles(state, transactions, [sidecar])
+
+            first_ids = {record["id"] for record in decodes if record["source_transaction"] == "TXN-first"}
+            expected = stable_evidence_id("DEC", {"transaction": "TXN-second", "family": "antsword", "sha256": hashlib.sha256(plain).hexdigest()})
+            antsword_event = next(event for event in events if event["family"] == "antsword")
+            output_path = Path(antsword_event["output"]["path"])
+
+            self.assertEqual(output_path.name, f"{expected}-request.bin")
+            self.assertNotIn(output_path.stem.removesuffix("-request"), first_ids)
 
 
 if __name__ == "__main__":

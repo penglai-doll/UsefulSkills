@@ -14,12 +14,12 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from common.io_utils import is_gzip, is_probably_text, is_xlsx, iter_text_lines, safe_relpath
+from common.io_utils import is_gzip, is_probably_text, is_well_known_log_name, is_xlsx, iter_text_lines, safe_relpath
 from common.output_layout import CasePaths, default_case_id, prepare_case_paths, resolve_case_paths
-from common.time_normalize import parse_timestamp
+from common.time_normalize import clear_timezone_notes, parse_timestamp, timezone_notes
 from common.xlsx_utils import iter_rows, read_header
 
-ACCESS_RE = re.compile(r'^\S+ \S+ \S+ \[[^\]]+\] "\S+ [^"]+" \d{3}|-')
+ACCESS_RE = re.compile(r'^\S+ \S+ \S+ \[[^\]]+\] "\S+ [^"]+" (\d{3}|-)')
 SPRING_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?\s+(ERROR|WARN|INFO|DEBUG|TRACE)\s+")
 
 SECURITY_KEYWORDS = [
@@ -137,6 +137,10 @@ def detect_text(path: Path, default_timezone: str, sample_limit: int) -> dict[st
     try:
         for line_no, line in iter_text_lines(path, max_lines=sample_limit):
             line_count = line_no
+            if "\ufffd" in line:
+                # open_text() decodes with errors="replace": a replacement char
+                # marks a line that could not be fully decoded as UTF-8.
+                bad += 1
             if len(first_lines) < 20 and line.strip():
                 first_lines.append(line)
             ts = parse_timestamp(line, default_timezone).get("timestamp")
@@ -169,13 +173,24 @@ def detect_text(path: Path, default_timezone: str, sample_limit: int) -> dict[st
     else:
         detected = "generic_text"
         confidence = "low" if first_lines else "unknown"
-    return {
+    if detected == "generic_text" and is_well_known_log_name(path):
+        # Extension-less syslog-style names (secure/messages/syslog/...) are
+        # best-effort system logs per references/log-types.md, not unknown text.
+        detected = "system_text"
+        base_note = "well_known_system_log:no_extension"
+    else:
+        base_note = None
+    result = {
         "detected_type": detected,
         "confidence": confidence,
         "sampled_line_count": line_count,
+        "bad_line_count": bad,
         "time_range": {"first": first_ts, "last": last_ts},
         "keyword_hits": keyword_hits,
     }
+    if base_note:
+        result["note"] = base_note
+    return result
 
 
 def inventory_file(path: Path, default_timezone: str, sample_limit: int) -> dict[str, Any]:
@@ -211,9 +226,12 @@ def inventory_file(path: Path, default_timezone: str, sample_limit: int) -> dict
         base["type_confidence"] = detected["confidence"]
         base["time_range"] = detected.get("time_range", base["time_range"])
         base["sampled_line_count"] = detected.get("sampled_line_count")
+        base["bad_line_count"] = detected.get("bad_line_count", 0)
         base["keyword_hits"] = detected.get("keyword_hits", {})
         if detected.get("error"):
             base["notes"].append(f"text_read_error:{detected['error']}")
+        if detected.get("note"):
+            base["notes"].append(detected["note"])
         if not base["time_range"].get("first"):
             base["time_parse_status"] = "unknown"
         return base
@@ -224,6 +242,7 @@ def inventory_file(path: Path, default_timezone: str, sample_limit: int) -> dict
 
 def build_manifest(args: argparse.Namespace, case_paths: CasePaths) -> dict[str, Any]:
     excluded_roots = [case_paths.workdir / "cache", case_paths.workdir / "report"]
+    clear_timezone_notes()
     files = [
         inventory_file(path, args.default_timezone, args.sample_limit)
         for path in discover(args.paths, args.include_hidden, excluded_roots)
@@ -240,6 +259,7 @@ def build_manifest(args: argparse.Namespace, case_paths: CasePaths) -> dict[str,
         },
         "network_assist": "enabled",
         "network_status": "unknown",
+        "timezone_notes": timezone_notes(),
         "created_at": datetime.now().astimezone().isoformat(),
         "files": files,
         "privacy": {

@@ -218,7 +218,7 @@ def analyze_registry(path: Path, limit: int) -> dict:
     role = hive_role(path)
     if role == "unknown":
         upper_payload = payload.upper()
-        if b"HKEY_LOCAL_MACHINE\\\\SOFTWARE" in upper_payload or b"HKLM\\\\SOFTWARE" in upper_payload:
+        if b"HKEY_LOCAL_MACHINE\\SOFTWARE" in upper_payload or b"HKLM\\SOFTWARE" in upper_payload:
             role = "software"
         elif b"HKEY_USERS" in upper_payload or b"HKEY_CURRENT_USER" in upper_payload:
             role = "user"

@@ -40,8 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     preflight = subparsers.add_parser("preflight")
-    preflight.add_argument("--json", action="store_true")
-    preflight.add_argument("--deep-probe", action="store_true")
+    preflight.add_argument("--json", action="store_true", help="emit the fixed JSON envelope (default: human-readable summary)")
+    preflight.add_argument(
+        "--deep-probe", action=argparse.BooleanOptionalAction, default=True,
+        help="run the expensive TShark capability probe (tshark -G fields and --export-objects)",
+    )
 
     analyze = subparsers.add_parser("analyze")
     analyze.add_argument("capture")
@@ -90,9 +93,24 @@ def _default_case(capture: Path) -> Path:
     return Path.cwd() / "tmp" / "WireToutetu" / f"{capture.stem}-{digest}"
 
 
+def _preflight_text(result: dict) -> str:
+    lines = [f"preflight: {result['status']}（platform route: {result['platform_route']}）"]
+    for name, details in result["tools"].items():
+        version = f" {details['version']}" if details.get("version") else ""
+        scope = f"（{details['scope']}）" if details.get("scope") else ""
+        lines.append(f"- {name}: {details.get('status', 'unknown')}{version}{scope} path={details.get('path')}")
+        capabilities = details.get("capabilities") or {}
+        if capabilities.get("field_count") is not None:
+            exports = ", ".join(capabilities.get("export_object_types") or []) or "none"
+            lines.append(f"  capabilities: {capabilities['field_count']} fields; export-objects: {exports}")
+    for action in result["next_actions"]:
+        lines.append(f"next: {action}")
+    return "\n".join(lines)
+
+
 def _run(args: argparse.Namespace) -> tuple[dict, int]:
     if args.command == "preflight":
-        result = run_preflight(deep_probe=True)
+        result = run_preflight(deep_probe=args.deep_probe)
         return make_envelope(
             status=result["status"], stage="preflight", summary={"platform_route": result["platform_route"], "tools": result["tools"]},
             counts={"available_tools": sum(item.get("status") == "available" for item in result["tools"].values())},
@@ -198,6 +216,10 @@ def main() -> int:
     args: argparse.Namespace | None = None
     try:
         args = build_parser().parse_args()
+        if args.command == "preflight" and not args.json:
+            result = run_preflight(deep_probe=args.deep_probe)
+            print(_preflight_text(result))
+            return 0 if result["status"] == "ok" else 2
         envelope, code = _run(args)
     except Exception as exc:
         envelope = make_envelope(

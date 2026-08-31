@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -297,12 +298,23 @@ def output_dir_for(args: argparse.Namespace, evidence: Path, suffix: str) -> Pat
         path = Path(args.output_dir).expanduser().resolve()
     else:
         path = Path.cwd().resolve() / "output" / f"{safe_case_id(evidence)}-{suffix}"
+    # SKILL.md contract: the case output directory must live OUTSIDE the
+    # directory that contains the evidence (no artifacts or temp files next
+    # to the evidence), and never on the evidence path itself.
+    evidence_dir = evidence.expanduser().resolve().parent
     try:
-        common = os.path.commonpath((str(evidence), str(path)))
-    except ValueError:
-        common = ""
-    if common == str(evidence):
-        raise ValueError("output directory must be outside the evidence path")
+        common_with_file = os.path.commonpath((str(evidence), str(path)))
+        common_with_dir = os.path.commonpath((str(evidence_dir), str(path)))
+    except ValueError:  # different drives/roots on the same host: always outside
+        common_with_file = common_with_dir = ""
+    if (
+        os.path.normcase(common_with_file) == os.path.normcase(str(evidence))
+        or os.path.normcase(common_with_dir) == os.path.normcase(str(evidence_dir))
+    ):
+        raise ValueError(
+            f"output directory {path} must be outside the evidence directory "
+            f"{evidence_dir} (SKILL.md: no output or temp files where the evidence lives)"
+        )
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -343,12 +355,11 @@ def plan(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = output_dir_for(args, evidence, "plan")
     guest_evidence = args.guest_evidence or f"/evidence/{evidence.name}"
     guest_root = args.guest_output or "/case"
-    quote = __import__("shlex").quote
+    quote = shlex.quote
     transport = args.transport
     start = f"utmctl start --hide {'--disposable ' if args.disposable else ''}{quote(args.vm)}"
     exec_cmd = f"utmctl exec --hide {quote(args.vm)} --cmd sh -lc <guest-command>"
     if transport == "ssh":
-        start = f"utmctl start --hide {'--disposable ' if args.disposable else ''}{quote(args.vm)}"
         exec_cmd = f"ssh <ssh-target> 'sh -lc <guest-command>'"
     steps = [
         {"id": "preflight", "plane": "host", "command": f"python3 scripts/forensicctl.py preflight {quote(jsonable_path(evidence))} --hash sha256 --inspect-image --output-dir {quote(jsonable_path(output_dir))} --json"},

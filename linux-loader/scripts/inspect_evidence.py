@@ -11,6 +11,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Iterable
@@ -139,8 +140,16 @@ def case_paths(output_dir: Path, case_id: str, mount_root: str | Path = DEFAULT_
 def run_command(args: list[str], timeout: int = 10) -> dict[str, Any]:
     started = time.time()
     try:
-        proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        proc = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
         return {
             "args": args,
             "returncode": None,
@@ -566,10 +575,12 @@ def _split_bind(bind: str) -> tuple[str, str, str | None]:
 def _source_exists_in_evidence(source: str, evidence_root: Path | None = None) -> bool:
     if not source:
         return False
-    source_path = Path(source)
-    if evidence_root and source_path.is_absolute():
-        return (evidence_root / source.lstrip("/")).exists()
-    return source_path.exists()
+    # Pure-string POSIX-absolute check: Path("/srv/site").is_absolute() is False on
+    # Windows, which used to make this helper resolve against the current drive.
+    normalized = source.replace("\\", "/")
+    if evidence_root and normalized.startswith("/"):
+        return (evidence_root / normalized.lstrip("/")).exists()
+    return Path(source).exists()
 
 
 def extract_docker_mount_mappings(data_root: Path, limit: int = 50, evidence_root: Path | None = None) -> list[dict[str, Any]]:
@@ -668,6 +679,10 @@ def _count_dirs(path: Path, limit: int = 100000) -> int:
 def find_named_files(base: Path, names: set[str], max_depth: int = 4, limit: int = 50) -> list[str]:
     if not base.exists():
         return []
+    if not base.is_absolute():
+        # Relative bases used to crash on child.relative_to(base.anchor or "/");
+        # resolving first guarantees a non-empty anchor (drive root or "/").
+        base = base.absolute()
     results: list[str] = []
     base_depth = len(base.parts)
     stack = [base]
@@ -727,8 +742,44 @@ def suggested_next_steps(role: str, refs: list[dict[str, str]], docker: dict[str
     return steps[:5]
 
 
-def mounted_tree_triage(root: Path, limit: int = 50, goals: list[str] | None = None) -> dict[str, Any]:
+def _fast_skipped_probe(label: str) -> dict[str, Any]:
+    return {"skipped": True, "reason": f"{label} probe skipped by triage-level fast"}
+
+
+def mounted_tree_triage(
+    root: Path,
+    limit: int = 50,
+    goals: list[str] | None = None,
+    triage_level: str = "full",
+) -> dict[str, Any]:
     role = classify_image_role(root)
+    if triage_level == "fast":
+        # fast = mount planning only: skip deep content probes (os profile,
+        # panel scan, Docker metadata/compose walk, path summaries) and keep
+        # the cheap anchor checks needed for role classification and routing.
+        services = detect_services(root)
+        triage = {"panels": _fast_skipped_probe("panel"), "services": services, "docker": {"detected": False}, "goals": goals or []}
+        refs = recommend_references(triage)
+        return {
+            "image_role": role,
+            "os_profile": _fast_skipped_probe("os-profile"),
+            "services": services,
+            "paths": bounded_items([], limit=limit),
+            "panels": _fast_skipped_probe("panel"),
+            "docker": {
+                "detected": False,
+                "container_count": 0,
+                "volume_count": 0,
+                "mount_mappings": bounded_items([], limit=limit),
+                "compose_candidates": bounded_items([], limit=limit),
+                **_fast_skipped_probe("docker"),
+            },
+            "triage_level": "fast",
+            "routes": {
+                "recommended_references": refs,
+                "suggested_next_steps": suggested_next_steps(role["role"], refs, {"detected": False}),
+            },
+        }
     profile = os_profile(root, limit=limit) if role["role"] in {"system", "mixed"} else {}
     services = detect_services(root)
     panels = detect_panels(root)
@@ -776,6 +827,7 @@ def inspect_path(
     output_dir: Path | None = None,
     mount_root: str | Path = DEFAULT_MOUNT_ROOT,
     goals: list[str] | None = None,
+    triage_level: str = "full",
 ) -> dict[str, Any]:
     stat = path.stat()
     case = safe_case_id(path, case_id)
@@ -814,7 +866,7 @@ def inspect_path(
         "errors": [],
     }
     if path.is_dir():
-        triage = mounted_tree_triage(path, limit=summary_limit, goals=goals)
+        triage = mounted_tree_triage(path, limit=summary_limit, goals=goals, triage_level=triage_level)
         result.update(
             {
                 "image_role": triage["image_role"]["role"],
@@ -827,6 +879,8 @@ def inspect_path(
                 "routes": triage["routes"],
             }
         )
+        if triage.get("triage_level"):
+            result["triage_level"] = triage["triage_level"]
     return result
 
 
@@ -838,10 +892,26 @@ def write_result(result: dict[str, Any], output_dir_abs: str, filename: str) -> 
     return str(path)
 
 
+def print_json(data: dict[str, Any]) -> None:
+    """Print ensure_ascii=False JSON without crashing on gbk/other consoles."""
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        for stream in (sys.stdout,):
+            if hasattr(stream, "reconfigure"):
+                try:
+                    stream.reconfigure(errors="replace")
+                except (AttributeError, OSError, ValueError):
+                    pass
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        print(text.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Inspect Linux evidence images or mounted trees.")
     parser.add_argument("path", nargs="?", help="Evidence image or mounted filesystem path")
-    parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+    parser.add_argument("--json", action="store_true", help="Write JSON to stdout (default behavior; flag kept for compatibility)")
     parser.add_argument("--output-dir", default="output/linux-loader", help="Output directory for artifacts")
     parser.add_argument("--case-id", default=None, help="Stable case id")
     parser.add_argument("--summary-limit", type=int, default=50, help="Maximum rows per model-facing category")
@@ -862,7 +932,7 @@ def main(argv: list[str] | None = None) -> int:
         hash_policy = parse_hash_policy(args.hash)
     except ValueError as exc:
         result = {"schema_version": SCHEMA_VERSION, "errors": [{"fatal": True, "message": str(exc)}]}
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print_json(result)
         return 1
 
     path = Path(args.path)
@@ -882,8 +952,8 @@ def main(argv: list[str] | None = None) -> int:
             result["output_files"] = {
                 "inspect_json": write_result(result, result["case_paths"]["output_dir_abs"], "inspect.json")
             }
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 1 if result.get("errors") and result["errors"][0].get("fatal") else 0
+    print_json(result)
+    return 1 if any(error.get("fatal") for error in result.get("errors") or []) else 0
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ support_status: verified-decode
 
 ## 提取方法
 
-解析 ac、id、h、p、dt、sid、r、m；dt 继续路由内层协议。
+WebSocket 事务读取 payload，HTTP 事务读取 request/response body；解析 ac、id、h、p、dt、sid、r、m，dt 继续路由内层协议。
 
 ## 解码状态机
 
@@ -39,7 +39,7 @@ support_status: verified-decode
 
 ## 夹具
 
-`txn.suo5-klv` ??????????`pcap.tunnels-suo5-regeorg` ???? TShark WebSocket?payload?suo5 ???
+`txn.suo5-klv` 覆盖 create/data/delete/heartbeat 动作与反例；`pcap.tunnels-suo5-regeorg` 以真实 TShark 验证 WebSocket payload 的 suo5 帧解码。HTTP 请求/响应体复用同一帧解码器，暂无独立夹具。
 
 ## 来源
 

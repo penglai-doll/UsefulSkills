@@ -77,7 +77,7 @@ description: Analyze offline PCAP/PCAPNG/CAP and gzip packet captures for CTF tr
 
 ## Output discipline
 
-- Every command returns the fixed JSON envelope documented in `references/schemas/data-contracts.md`.
+- Every command returns the fixed JSON envelope documented in `references/schemas/data-contracts.md`. Exception: `preflight` without `--json` prints a human-readable summary instead, with the same exit codes. `preflight --no-deep-probe` skips the expensive TShark capability probe (`tshark -G fields`, `--export-objects help`) when only the tool inventory is needed.
 - Default to interactive evidence, not a formal report.
 - When a stage fails, keep parser, filter, tool, and input errors separate; resume from the last valid checkpoint.
 - Use `cleanup --case-dir <dir>` only for generated case files. Verify original capture and sidecar hashes remain unchanged.

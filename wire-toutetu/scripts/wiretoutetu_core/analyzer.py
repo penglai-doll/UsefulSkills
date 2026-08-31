@@ -213,10 +213,11 @@ def _build_http(
             "packet": None,
             "time": None,
             "method": None,
-            "uri": packet.get("http.request.uri", ""),
-            "host": packet.get("http.host", ""),
+            "uri": None,
+            "host": None,
             "headers": {},
             "_body": None,
+            "note": "request frame not captured; request fields are unknown for this response",
         }
         material = {
             "capture_sha256": capture_sha256,
@@ -554,12 +555,14 @@ def analyze_capture(
         if transaction.get("protocol") != "http/1.x":
             continue
         event_id = stable_evidence_id("EVT", {"transaction": transaction["id"], "kind": "http"})
+        method = transaction["request"].get("method") or "unmatched-response"
+        uri = transaction["request"].get("uri") or ""
         events.append(
             {
                 "id": event_id,
                 "time": transaction["request"]["time"] or transaction["response"]["time"],
                 "kind": "http-transaction",
-                "operation": f"{transaction['request']['method']} {transaction['request']['uri']}",
+                "operation": f"{method} {uri}".rstrip(),
                 "result": transaction["response"]["status"],
                 "evidence_ids": [transaction["id"]],
             }

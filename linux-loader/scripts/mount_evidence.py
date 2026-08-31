@@ -98,8 +98,16 @@ def select_mount_root(requested: str | Path, case_id: str) -> dict[str, Any]:
 def run_command(args: list[str], timeout: int = 60) -> dict[str, Any]:
     started = time.time()
     try:
-        proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        proc = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
         return {
             "args": args,
             "returncode": None,
@@ -119,8 +127,17 @@ def run_command(args: list[str], timeout: int = 60) -> dict[str, Any]:
 def run_command_with_input(args: list[str], input_text: str, timeout: int = 60) -> dict[str, Any]:
     started = time.time()
     try:
-        proc = subprocess.run(args, input=input_text, capture_output=True, text=True, timeout=timeout, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        proc = subprocess.run(
+            args,
+            input=input_text,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
         return {
             "args": args,
             "returncode": None,
@@ -282,17 +299,128 @@ def probe_loop_support(privilege: dict[str, Any] | None = None) -> dict[str, Any
     return result
 
 
+def stat_evidence(path: Path) -> dict[str, Any]:
+    st = path.stat()
+    return {"path": str(path.resolve()), "size": st.st_size, "mtime": st.st_mtime}
+
+
+def locate_prior_inspection(args: argparse.Namespace) -> Path:
+    """Default location of the prior inspect.json: <output-dir>/<case-id>/inspect.json."""
+    case = inspect_helpers.safe_case_id(Path(args.path or "case"), args.case_id)
+    return Path(args.output_dir).expanduser().resolve() / case / "inspect.json"
+
+
+def apply_resume_validation(saved: dict[str, Any], args: argparse.Namespace, inspect_file: Path) -> dict[str, Any]:
+    """--resume: validate the saved inspection against the current evidence file.
+
+    Reuses the saved inspection instead of re-running inspect_path. Evidence size
+    mismatch is a hard blocker (fatal error); mtime drift and path changes are
+    warnings. The active-mount check inside validate_resume is intentionally not
+    applied here because --resume always re-plans mounts, and prior mounts may
+    have been cleaned up on purpose; prior mount state is recorded for info only.
+    """
+    result = dict(saved)
+    errors = list(saved.get("errors") or [])
+    evidence = saved.get("evidence_file") or {}
+    evidence_path = Path(args.path) if args.path else Path(evidence.get("path") or "")
+
+    if not str(evidence_path) or not evidence_path.exists():
+        result["resume"] = {
+            "can_resume": False,
+            "blockers": [f"--resume: prior evidence not found: {evidence_path}"],
+            "warnings": [],
+        }
+        result["errors"] = errors + [
+            {"fatal": True, "stage": "resume", "message": f"--resume: prior evidence not found: {evidence_path}"}
+        ]
+        return result
+
+    prior_meta: dict[str, Any] = {}
+    run_meta_file = inspect_file.parent / "run-meta.json"
+    if run_meta_file.exists():
+        try:
+            prior_meta = json.loads(run_meta_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            prior_meta = {}
+    if not prior_meta.get("evidence"):
+        prior_meta = {
+            "evidence": {key: evidence.get(key) for key in ("path", "size", "mtime")},
+            "mounts": [],
+        }
+
+    try:
+        current = stat_evidence(evidence_path)
+    except OSError as exc:
+        result["resume"] = {
+            "can_resume": False,
+            "blockers": [f"--resume: cannot stat evidence: {exc}"],
+            "warnings": [],
+        }
+        result["errors"] = errors + [
+            {"fatal": True, "stage": "resume", "message": f"--resume: cannot stat evidence: {exc}"}
+        ]
+        return result
+
+    current_mounts = active_mounts()
+    report = validate_resume({"evidence": prior_meta.get("evidence") or {}, "mounts": []}, current, current_mounts)
+    prior_active = [
+        str(item.get("mount_path"))
+        for item in (prior_meta.get("mounts") or [])
+        if item.get("active") and item.get("mount_path")
+    ]
+    report["prior_mounts_still_active"] = [path for path in prior_active if path in set(current_mounts)]
+    report["resumed_from"] = str(inspect_file)
+
+    result["resume"] = report
+    if not report["can_resume"]:
+        result["errors"] = errors + [
+            {"fatal": True, "stage": "resume", "message": f"--resume blocked: {blocker}"} for blocker in report["blockers"]
+        ]
+    return result
+
+
 def load_inspection(args: argparse.Namespace) -> dict[str, Any]:
     if args.inspect_json:
+        inspect_file = Path(args.inspect_json)
         try:
-            return json.loads(Path(args.inspect_json).read_text(encoding="utf-8"))
+            saved = json.loads(inspect_file.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             return {"schema_version": SCHEMA_VERSION, "errors": [{"fatal": True, "message": f"cannot read inspect-json: {exc}"}]}
+        if args.resume:
+            return apply_resume_validation(saved, args, inspect_file)
+        return saved
     if not args.path:
+        if args.resume:
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "errors": [
+                    {
+                        "fatal": True,
+                        "stage": "resume",
+                        "message": "--resume requires the evidence path (prior inspection is read from <output-dir>/<case-id>/inspect.json) or --inspect-json",
+                    }
+                ],
+            }
         return {"schema_version": SCHEMA_VERSION, "errors": [{"fatal": True, "message": "path is required unless --inspect-json is supplied"}]}
     path = Path(args.path)
     if not path.exists():
         return {"schema_version": SCHEMA_VERSION, "errors": [{"fatal": True, "message": f"path not found: {path}"}]}
+    if args.resume:
+        inspect_file = locate_prior_inspection(args)
+        try:
+            saved = json.loads(inspect_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "errors": [
+                    {
+                        "fatal": True,
+                        "stage": "resume",
+                        "message": f"--resume cannot read prior inspection {inspect_file}: {exc}; run inspect first or pass --inspect-json",
+                    }
+                ],
+            }
+        return apply_resume_validation(saved, args, inspect_file)
     return inspect_helpers.inspect_path(
         path,
         inspect_helpers.parse_hash_policy(args.hash),
@@ -301,6 +429,7 @@ def load_inspection(args: argparse.Namespace) -> dict[str, Any]:
         output_dir=Path(args.output_dir),
         mount_root=args.mount_root,
         goals=args.goal,
+        triage_level=args.triage_level,
     )
 
 
@@ -708,18 +837,58 @@ def write_json(path: Path, data: dict[str, Any]) -> str:
     return str(path)
 
 
+def loop_probe_skipped(reason: str) -> dict[str, Any]:
+    return {
+        "loop_attach": "unknown",
+        "losetup_partition_scan": "unknown",
+        "known_good_fixture": None,
+        "reason": reason,
+    }
+
+
+def print_json(data: dict[str, Any]) -> None:
+    """Print ensure_ascii=False JSON without crashing on gbk/other consoles."""
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        for stream in (sys.stdout,):
+            if hasattr(stream, "reconfigure"):
+                try:
+                    stream.reconfigure(errors="replace")
+                except (AttributeError, OSError, ValueError):
+                    pass
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        print(text.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Prepare or run read-only Linux evidence mount commands.")
     parser.add_argument("path", nargs="?", help="Evidence image path")
-    parser.add_argument("--json", action="store_true", help="Write JSON to stdout")
+    parser.add_argument("--json", action="store_true", help="Write JSON to stdout (default behavior; flag kept for compatibility)")
     parser.add_argument("--output-dir", default="output/linux-loader", help="Output directory for artifacts")
     parser.add_argument("--case-id", default=None, help="Stable case id")
     parser.add_argument("--summary-limit", type=int, default=50, help="Maximum rows per model-facing category")
     parser.add_argument("--hash", default="none", help="none, later, md5, sha1, sha256, or comma-separated algorithms")
     parser.add_argument("--dry-run", action="store_true", help="Print planned commands without mounting")
     parser.add_argument("--inspect-json", help="Reuse inspection result")
-    parser.add_argument("--resume", action="store_true", help="Resume from run-meta.json")
-    parser.add_argument("--triage-level", choices=["full", "fast"], default="full")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Resume from a prior inspection: load it from --inspect-json or <output-dir>/<case-id>/inspect.json, "
+            "re-validate evidence (size mismatch is fatal; mtime drift only warns), then re-plan mounts without re-inspecting"
+        ),
+    )
+    parser.add_argument(
+        "--triage-level",
+        choices=["full", "fast"],
+        default="full",
+        help=(
+            "full runs every triage probe; fast skips deep probes not needed for mount planning "
+            "(os profile, panel scan, Docker metadata walk) and the privileged loop probe"
+        ),
+    )
     parser.add_argument("--mount-root", default=DEFAULT_MOUNT_ROOT, help="Preferred mount root")
     parser.add_argument("--goal", action="append", default=[], help="Focused analysis goal used only for reference routing")
     return parser
@@ -733,9 +902,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     inspect_result = load_inspection(args)
-    if inspect_result.get("errors") and inspect_result["errors"][0].get("fatal"):
-        print(json.dumps(inspect_result, ensure_ascii=False, indent=2))
+    if any(error.get("fatal") for error in inspect_result.get("errors") or []):
+        print_json(inspect_result)
         return 1
+
+    resume_report = inspect_result.get("resume")
+    if args.resume and isinstance(inspect_result.get("preflight"), dict):
+        inspect_result["preflight"]["resume_state"] = "validated" if (resume_report or {}).get("can_resume") else "blocked"
 
     case_id = inspect_result.get("case_id") or inspect_helpers.safe_case_id(Path(args.path or "case"), args.case_id)
     output_dir = Path(args.output_dir).expanduser().resolve() / case_id
@@ -744,7 +917,12 @@ def main(argv: list[str] | None = None) -> int:
     privilege = build_privilege_context()
     commands, mounts = plan_mounts(inspect_result, selected_mount_root, privilege=privilege)
 
-    loop_probe = probe_loop_support(privilege)
+    if args.dry_run:
+        loop_probe = loop_probe_skipped("unknown (not probed in dry-run)")
+    elif args.triage_level == "fast":
+        loop_probe = loop_probe_skipped("skipped (triage-level fast)")
+    else:
+        loop_probe = probe_loop_support(privilege)
     hash_policy = inspect_helpers.parse_hash_policy(args.hash)
     if not args.dry_run:
         commands, mounts = execute_plan(commands, mounts)
@@ -755,6 +933,7 @@ def main(argv: list[str] | None = None) -> int:
         "case_id": case_id,
         "dry_run": args.dry_run,
         "triage_level": args.triage_level,
+        "resume": resume_report,
         "evidence_file": inspect_result.get("evidence_file"),
         "hashes": inspect_result.get("hashes"),
         "case_paths": {
@@ -784,7 +963,7 @@ def main(argv: list[str] | None = None) -> int:
             if cmd.get("blocked") and cmd.get("block_reason")
         ],
     }
-    output_files["mount_json"] = write_json(output_dir / "mount.json", result)
+    output_files["mount_json"] = str(output_dir / "mount.json")
     output_files["inspect_json"] = write_json(output_dir / "inspect.json", inspect_result)
     run_meta = build_run_meta(case_id, inspect_result, output_dir, Path(selected_mount_root), mounts, hash_policy, output_files)
     output_files["run_meta_json"] = write_json(output_dir / "run-meta.json", run_meta)
@@ -792,7 +971,7 @@ def main(argv: list[str] | None = None) -> int:
     result["output_files"] = output_files
     write_json(output_dir / "mount.json", result)
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print_json(result)
     if args.dry_run:
         return 0
     if any(cmd.get("blocked") for cmd in commands):

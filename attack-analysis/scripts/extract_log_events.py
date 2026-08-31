@@ -13,6 +13,8 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
+from common.time_normalize import clear_timezone_notes, timezone_notes
+
 PARSER_MAP = {
     "web_access": ["parsers.apache_access"],
     "apache_access": ["parsers.apache_access"],
@@ -44,14 +46,18 @@ def extract(manifest: dict[str, Any], limit_per_file: int) -> dict[str, Any]:
     events: list[dict[str, Any]] = []
     parser_stats: list[dict[str, Any]] = []
     default_tz = manifest.get("default_timezone")
+    clear_timezone_notes()
     for file_entry in manifest.get("files", []):
         if not file_entry.get("include", True):
             continue
         path = file_entry.get("path")
-        log_type = file_entry.get("detected_type") or file_entry.get("declared_type") or "generic_text"
+        # Interactive contract (SKILL.md): a user-confirmed declared_type wins
+        # over detection; detection stays the fallback for quick-report runs.
+        log_type = file_entry.get("declared_type") or file_entry.get("detected_type") or "generic_text"
         modules = PARSER_MAP.get(log_type, ["parsers.generic_text"])
         enriched_entry = dict(file_entry)
         enriched_entry["default_timezone"] = default_tz
+        enriched_entry["log_type"] = log_type
         for module_name in modules:
             try:
                 result = call_parser(module_name, path, enriched_entry, limit_per_file)
@@ -61,13 +67,21 @@ def extract(manifest: dict[str, Any], limit_per_file: int) -> dict[str, Any]:
                 parser_stats.append({"path": path, "module": module_name, "error": str(exc)})
     for idx, event in enumerate(events, 1):
         event["event_id"] = f"evt-{idx:06d}"
-    return {
+    result = {
         "case_id": manifest.get("case_id"),
         "mode": manifest.get("mode"),
         "event_count": len(events),
         "events": events,
         "parser_stats": parser_stats,
     }
+    tz_notes = timezone_notes()
+    if tz_notes:
+        # Surface timezone degradation (e.g. missing tzdata on Windows) loudly
+        # instead of leaving silently naive timestamps in the events.
+        result["timezone_notes"] = tz_notes
+        for stat in parser_stats:
+            stat.setdefault("warnings", []).extend(tz_notes)
+    return result
 
 
 def main() -> int:

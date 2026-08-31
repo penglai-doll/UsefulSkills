@@ -1,6 +1,6 @@
 # UsefulSkills
 
-一组基于我自己日常工作流的实用 Skills，主要用于数字取证、安全分析、OSINT 和写作优化（持续更新）。每个 Skill 都是独立目录，可以按需安装和调用。
+一组基于我自己日常工作流的实用 Skills，主要用于数字取证、安全分析和写作优化（持续更新）。每个 Skill 都是独立目录，可以按需安装和调用。
 
 ## Skills
 
@@ -13,7 +13,6 @@
 | 磁盘取证(基于MacOS，面向Linux) | [`utm-forensic-cli`](./utm-forensic-cli/) | macOS 通过 UTM Linux VM 隔离取证 |
 | 流量分析 | [`wire-toutetu`](./wire-toutetu/) | PCAP、CTF 与 WebShell 流量分析 |
 | 写作辅助 | [`writing-helper`](./writing-helper/) | 降低 AI 味和表达压力，同时保留原意 |
-| OSINT | `osint-skill` | 舆情搜集、信源核验与中文简报（草案） |
 
 ## 安装
 
@@ -51,6 +50,7 @@ cp -R UsefulSkills/<skill-name> "${CODEX_HOME:-$HOME/.codex}/skills/"
 
 - **用法：** 提供 APK、APKS、XAPK、ZIP 或已解包目录，并选择 `evidence`（固证）或 `reverse`（逆向）模式。
 - **优点：** 分离固证与逆向目标；覆盖资源、Java/Smali、隐藏载荷和 Native/SO；结论带证据 ID、来源、位置与状态，便于复核。
+- **特别说明：** 目前正在测试谷歌的WikiSkill，借以实现Skill的自进化系统，还在测试阶段，有问题可以随时提出
 
 ### attack-analysis
 
@@ -78,7 +78,7 @@ cp -R UsefulSkills/<skill-name> "${CODEX_HOME:-$HOME/.codex}/skills/"
 - **为什么会出现：** 用Mac取证很奇怪对吧，但是就是有的时候，只带了一个Mac出差，半路突然来个任务，做服务器取证，远程家里的Windows还坏了，这种极端情况下，Mac也不是不能用（滑稽）
 - **注意：** 需要自带UTM虚拟机环境
 
-- **用法：** 在 macOS 上提供证据路径、案例输出目录和 UTM VM，选择 `preflight`、`quick-report` 或 `interactive`。
+- **用法：** 在 macOS 上提供证据路径、案例输出目录和 UTM VM，选择 `preflight`、`quick-report`、`interactive` 或 `simulation-boot`（检材仿真引导：以扣押镜像为磁盘，经只读 NBD 通道启动无网卡、写阻塞的隔离 VM）。
 - **优点：** 将 Sleuth Kit、libewf 和 YARA 隔离在 UTM Linux VM；分离原始证据、输出与 VM 写层；完整记录命令和工具版本。
 
 ### wire-toutetu
@@ -94,13 +94,9 @@ cp -R UsefulSkills/<skill-name> "${CODEX_HOME:-$HOME/.codex}/skills/"
 - **优点：** 删除重复总结、抽象包装和过度修辞，同时保留事实、立场、限定条件、领域术语与作者个性。
 - **补充：** 本人平时发癫写二创文的时候偶然诞生的，配合Gemini写日式轻小说形式的有奇效
 
-### osint-skill（测试中）
-
-- **用法：** 提供议题、时间范围、地区、语言和输出形式，用于舆情搜集、信源核验、时间线或中文简报。
-- **优点：** 保留来源与采集时间，交叉核验重要说法，并区分事实、主张、情绪信号、传播影响和待确认缺口。
-
 ## 参考文献
 
 - [好SKill的五个共性](https://mp.weixin.qq.com/s/BDPTsJy1GZL4PgSx9L4ykw)
+- [WikiSkill](https://arxiv.org/pdf/2608.27454)
 - 安恒“恒脑”（思维链参考）
 - 很多很碎的东西，会慢慢补充

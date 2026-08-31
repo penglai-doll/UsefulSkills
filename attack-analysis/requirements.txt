@@ -1,0 +1,6 @@
+# attack-analysis runtime dependencies.
+# The scripts are stdlib-only except for timezone data on Windows:
+# zoneinfo has no system tz database there, so `pip install tzdata` is required
+# for --default-timezone / per-file time zones to resolve.
+# On Linux (and macOS) the system tz database is used and this install is skipped.
+tzdata; sys_platform == "win32"

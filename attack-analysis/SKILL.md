@@ -42,6 +42,8 @@ python3 <skill-root>/scripts/extract_log_events.py --manifest "$PWD/cache/<case-
 python3 <skill-root>/scripts/correlate_events.py --events "$PWD/cache/<case-id>/event-candidates.json" --output-dir "$PWD/cache/<case-id>/" --json
 ```
 
+Environment: Python 3.10+ standard library only, plus the `tzdata` package on Windows (`pip install -r <skill-root>/requirements.txt`). Linux uses the system tz database and needs nothing extra. Without `tzdata` on Windows, named time zones such as `Asia/Shanghai` cannot resolve: timestamps stay naive and are marked `unknown`, and the manifest and event output record a `timezone_notes` warning — treat any such warning as a setup problem to fix before trusting the timeline.
+
 Script roles:
 
 - `inventory_logs.py`: file discovery, type detection, size strategy, time-range hints, and manifest seed.

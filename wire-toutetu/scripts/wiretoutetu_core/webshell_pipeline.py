@@ -124,8 +124,6 @@ def apply_webshell_profiles(
                 continue
             if not matched:
                 continue
-            if family == "suo5" and transaction.get("protocol") != "websocket":
-                continue
             if family != "suo5" and transaction.get("protocol") == "websocket":
                 continue
             default_direction = "payload" if transaction.get("protocol") == "websocket" else "request"
@@ -171,16 +169,18 @@ def apply_webshell_profiles(
                 })
                 continue
             output = result.get("output")
+            family_decode_ids: list[str] = []
             for record in result.get("records", []):
                 if "id" not in record:
                     record["id"] = stable_evidence_id("DEC", {"transaction": transaction["id"], "family": family, "input": record.get("input_sha256")})
                 record["source_transaction"] = transaction["id"]
                 record["direction"] = direction
+                family_decode_ids.append(record["id"])
                 decodes.append(record)
             output_meta = None
             if isinstance(output, bytes):
                 digest = hashlib.sha256(output).hexdigest()
-                decode_id = decodes[-1]["id"] if decodes else stable_evidence_id("DEC", {"transaction": transaction["id"], "family": family, "sha256": digest})
+                decode_id = family_decode_ids[-1] if family_decode_ids else stable_evidence_id("DEC", {"transaction": transaction["id"], "family": family, "sha256": digest})
                 output_path = state.root / "objects" / f"{decode_id}-{direction}.bin"
                 state.write_artifact(output_path, output, owner="decode")
                 output_meta = {"path": str(output_path.resolve()), "size": len(output), "sha256": digest}

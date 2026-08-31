@@ -39,7 +39,7 @@ support_status: verified-extract
 
 ## 夹具
 
-`txn.regeorg-control` ???????`pcap.tunnels-suo5-regeorg` ???? TShark HTTP ????????????
+`txn.regeorg-control` 覆盖 CONNECT/FORWARD/READ/DISCONNECT 控制序列与普通 POST 反例；`pcap.tunnels-suo5-regeorg` 以真实 TShark 验证 HTTP 控制头提取与目标字段重建。
 
 ## 来源
 

@@ -16,7 +16,7 @@ These may be inventoried and parsed with generic extraction, but reports must st
 
 - `auth_text`: Linux auth/secure style text logs.
 - `firewall_text` / `waf_text`: plain-text firewall or WAF exports.
-- `system_text` / `service_text`: generic OS/service logs.
+- `system_text` / `service_text`: generic OS/service logs. Extension-less syslog-style filenames (`secure`, `messages`, `syslog`, `auth`, `kern`, `daemon`, `cron`, `maillog`, `debug`, including rotated forms like `secure.1` and `.gz` variants) are inventoried as text and typed as `system_text` when content detection stays generic; binary accounting files (`wtmp`, `btmp`, `lastlog`, `faillog`) remain excluded.
 - `mysqlbinlog_text`: text already exported by `mysqlbinlog`; v1 does not parse binary binlog directly.
 - `generic_text`: unknown text logs with timestamps/IPs/keywords.
 

@@ -1,5 +1,5 @@
 Windows Registry Editor Version 5.00
 
-[HKEY_LOCAL_MACHINE\\Software\\FooChat]
+[HKEY_LOCAL_MACHINE\Software\FooChat]
 "InstallPath"="C:\\Program Files\\FooChat"
 "Server"="chat.example.test"

@@ -50,11 +50,11 @@ def safe_directory_names(directory: Path, summary: ScanSummary, excluded: set[st
                 if is_reparse(path, entry, summary):
                     continue
                 try:
-                    directory = entry.is_dir(follow_symlinks=False)
+                    is_directory = entry.is_dir(follow_symlinks=False)
                 except OSError as error:
                     summary.errors.append(f"directory probe failed at {path}: {error}")
                     continue
-                if not directory:
+                if not is_directory:
                     continue
                 if entry.name.casefold() not in (excluded or set()):
                     values.append(entry.name)
@@ -144,11 +144,6 @@ def main() -> None:
             for path in discovered:
                 hits[guest_path(root, path)] = (root, path)
             skipped.extend(guest_path(root, path) for path in reparse)
-            for requested in args.guest_path:
-                local = guest_to_local(root, requested, summary)
-                if local is not None and (safe_is_file(local, summary) or safe_is_dir(local, summary)):
-                    canonical = guest_path(root, local)
-                    hits[canonical] = (root, local)
         errors.extend(root_errors)
     errors.extend(summary.errors)
     requested_hits: list[str] = []

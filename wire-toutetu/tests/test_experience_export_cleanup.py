@@ -155,6 +155,44 @@ class ExperienceExportCleanupTests(unittest.TestCase):
                 cleanup_case(state.root)
             self.assertEqual(outside.read_text(encoding="utf-8"), "preserve")
 
+    def test_markdown_export_appends_truncation_note_with_real_totals(self) -> None:
+        from wiretoutetu_core.case_state import MAX_QUERY_ITEMS, CaseState
+        from wiretoutetu_core.exporter import export_markdown
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "source.pcap"
+            capture.write_bytes(b"original")
+            state = CaseState.create(root / "case", capture, [])
+            state.write_records("summary", [{"completeness": "complete"}])
+            state.write_records("timeline", [{"id": f"EVT-{index}", "time": float(index)} for index in range(MAX_QUERY_ITEMS + 25)])
+            state.write_records("objects", [{"id": "OBJ-1", "filename": "a.bin", "sha256": "0" * 64}])
+            markdown = root / "report.md"
+
+            export_markdown(state, markdown)
+
+            text = markdown.read_text(encoding="utf-8")
+            self.assertIn(f"⚠ 截断：仅导出前 {MAX_QUERY_ITEMS}/{MAX_QUERY_ITEMS + 25} 条", text)
+            self.assertIn("完整数据见 case 目录 records/timeline.jsonl", text)
+            self.assertEqual(text.count("⚠ 截断"), 1)
+
+    def test_markdown_export_omits_truncation_note_when_complete(self) -> None:
+        from wiretoutetu_core.case_state import CaseState
+        from wiretoutetu_core.exporter import export_markdown
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            capture = root / "source.pcap"
+            capture.write_bytes(b"original")
+            state = CaseState.create(root / "case", capture, [])
+            state.write_records("summary", [{"completeness": "complete"}])
+            state.write_records("timeline", [{"id": "EVT-1", "time": 1.0}])
+            markdown = root / "report.md"
+
+            export_markdown(state, markdown)
+
+            self.assertNotIn("⚠ 截断", markdown.read_text(encoding="utf-8"))
+
     def test_exports_inside_case_are_registered_and_removed_by_cleanup(self) -> None:
         from wiretoutetu_core.case_state import CaseState
         from wiretoutetu_core.cleanup import cleanup_case

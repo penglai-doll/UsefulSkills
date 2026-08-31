@@ -24,7 +24,7 @@ def parse(path: str | Path, file_entry: dict[str, Any], limit: int = 5000) -> di
             make_event(
                 timestamp_text=line,
                 source_file=str(path),
-                log_type=file_entry.get("detected_type") or "generic_text",
+                log_type=file_entry.get("log_type") or file_entry.get("detected_type") or "generic_text",
                 event_type="generic_signal",
                 actor_ip=ips[0] if ips else None,
                 request_or_action="keyword/ip signal",

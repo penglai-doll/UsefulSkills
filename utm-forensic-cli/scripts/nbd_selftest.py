@@ -11,11 +11,20 @@ Usage:
 
 Exit 0 = server is serving the evidence correctly.
 """
+import argparse
 import socket
 import struct
 import sys
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 10809
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="nbd_selftest.py",
+        description="Self-test client for nbd_evidence_server.py: emulates the QEMU "
+        "fixed-newstyle handshake, reads the first sector and checks the reply.",
+    )
+    parser.add_argument("port", nargs="?", type=int, default=10809,
+                        help="NBD port to test (default: 10809)")
+    return parser.parse_args()
 
 def recv_exact(s, n):
     buf = b""
@@ -26,8 +35,8 @@ def recv_exact(s, n):
         buf += chunk
     return buf
 
-def main():
-    s = socket.create_connection(("127.0.0.1", PORT), timeout=5)
+def main(port: int) -> int:
+    s = socket.create_connection(("127.0.0.1", port), timeout=5)
 
     greet = recv_exact(s, 18)
     magic, ihaveopt, flags = struct.unpack(">QQH", greet)
@@ -76,4 +85,4 @@ def main():
     return 0
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(parse_args().port))

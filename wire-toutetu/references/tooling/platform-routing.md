@@ -39,7 +39,7 @@ preflight 只探测并给升级提示，安装与驱动另行确认。
 
 ## 夹具
 
-Windows/TShark 4.6.4 ????Linux/WSL ??? mock/????????? smoke ????
+Windows/TShark 4.6.4 实机验证；Linux/WSL 的路由判定以 mock 与单元测试覆盖，真实 TShark 冒烟由集成夹具补充，维持 best-effort 分级。
 
 ## 来源
 

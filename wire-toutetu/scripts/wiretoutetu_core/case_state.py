@@ -296,6 +296,14 @@ class CaseState:
             "returned_bytes": total_bytes,
         }
 
+    def count_records(self, name: str) -> int:
+        """Cheap total row count for a collection, without loading records."""
+        path = self._record_path(name)
+        if not path.is_file():
+            return 0
+        with path.open("r", encoding="utf-8") as handle:
+            return sum(1 for line in handle if line.strip())
+
     def find_record(self, name: str, evidence_id: str) -> dict[str, Any] | None:
         """Find one evidence record without making the caller walk every page."""
         path = self._record_path(name)

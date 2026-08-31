@@ -39,7 +39,7 @@ sidecar/profile 指定 AES key/mode/IV/nonce/tag 时。
 
 ## 夹具
 
-ECB/CBC ? WebShell ?????GCM ???? tag?GCM ???????????
+ECB/CBC 由 WebShell 解密夹具（冰蝎/哥斯拉）覆盖并校验 PKCS7；GCM 解密需要 nonce 与 tag，GCM 暂无独立夹具，维持 best-effort 分级。
 
 ## 来源
 

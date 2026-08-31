@@ -14,8 +14,13 @@ from typing import Any
 def parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
+    text = value.strip()
+    # datetime.fromisoformat() only accepts the 'Z' suffix from Python 3.11;
+    # normalize it so older runtimes parse UTC timestamps too.
+    if text.endswith(("Z", "z")):
+        text = text[:-1] + "+00:00"
     try:
-        return datetime.fromisoformat(value)
+        return datetime.fromisoformat(text)
     except ValueError:
         return None
 

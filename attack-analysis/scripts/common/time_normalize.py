@@ -25,6 +25,21 @@ ACCESS_TS_RE = re.compile(r"\[(?P<day>\d{2})/(?P<mon>[A-Za-z]{3})/(?P<year>\d{4}
 ISO_TS_RE = re.compile(r"(?P<dt>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)(?:\s*(?P<offset>Z|[+-]\d{2}:?\d{2}))?")
 DATE_COMPACT_RE = re.compile(r"^(?P<date>\d{8})$")
 
+# Zone lookup failures are recorded here so callers can surface them in
+# manifest/parser output instead of silently degrading to naive timestamps.
+# Windows has no system tz database: install the `tzdata` pip package
+# (see requirements.txt). Linux uses the system tz database.
+_ZONE_ERROR_NOTES: set[str] = set()
+
+
+def timezone_notes() -> list[str]:
+    """Return unique notes about failed timezone lookups (kept until cleared)."""
+    return sorted(_ZONE_ERROR_NOTES)
+
+
+def clear_timezone_notes() -> None:
+    _ZONE_ERROR_NOTES.clear()
+
 
 def timezone_obj(name: str | None):
     if not name:
@@ -36,6 +51,13 @@ def timezone_obj(name: str | None):
     try:
         return ZoneInfo(name)
     except ZoneInfoNotFoundError:
+        _ZONE_ERROR_NOTES.add(
+            f"tzdata_unavailable:{name} - cannot resolve IANA zone; "
+            "install the 'tzdata' pip package (required on Windows; Linux uses the system tz database)"
+        )
+        return None
+    except ValueError as exc:
+        _ZONE_ERROR_NOTES.add(f"tz_lookup_failed:{name}:{exc}")
         return None
 
 
@@ -57,9 +79,13 @@ def parse_timestamp(text: str | None, default_timezone: str | None = None) -> di
     match = ACCESS_TS_RE.search(s)
     if match:
         parts = match.groupdict()
+        month = MONTHS.get(parts["mon"].title())
+        if month is None:
+            # Unknown month name must not silently become January.
+            return {"timestamp": None, "status": "unknown", "raw": match.group(0)}
         dt = datetime(
             int(parts["year"]),
-            MONTHS.get(parts["mon"], 1),
+            month,
             int(parts["day"]),
             *[int(x) for x in parts["hms"].split(":")],
             tzinfo=_offset_to_tz(parts["offset"]),

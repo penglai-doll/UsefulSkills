@@ -17,6 +17,22 @@ TEXT_EXTENSIONS = {
     ".jsonl",
 }
 
+# Well-known extension-less syslog-style basenames (rsyslog default destinations)
+# that attack-analysis treats as text and types as generic system logs for
+# AI/parser handling. Binary accounting files such as wtmp/btmp/lastlog/faillog
+# are deliberately absent so they stay excluded.
+WELL_KNOWN_LOG_BASENAMES = {
+    "secure",
+    "messages",
+    "syslog",
+    "auth",
+    "kern",
+    "daemon",
+    "cron",
+    "maillog",
+    "debug",
+}
+
 
 def is_gzip(path: str | Path) -> bool:
     p = Path(path)
@@ -27,12 +43,24 @@ def is_xlsx(path: str | Path) -> bool:
     return Path(path).suffix.lower() == ".xlsx"
 
 
+def is_well_known_log_name(path: str | Path) -> bool:
+    """True for syslog-style basenames like `secure`/`messages`/`syslog`, including rotated forms."""
+    p = Path(path)
+    if is_gzip(p):
+        p = p.with_suffix("")
+    return p.name.lower() in WELL_KNOWN_LOG_BASENAMES or p.stem.lower() in WELL_KNOWN_LOG_BASENAMES
+
+
 def is_probably_text(path: str | Path) -> bool:
     p = Path(path)
     if is_gzip(p):
         inner = p.with_suffix("")
-        return inner.suffix.lower() in TEXT_EXTENSIONS or ".log" in inner.name.lower()
-    return p.suffix.lower() in TEXT_EXTENSIONS or ".log" in p.name.lower()
+        return (
+            inner.suffix.lower() in TEXT_EXTENSIONS
+            or ".log" in inner.name.lower()
+            or is_well_known_log_name(p)
+        )
+    return p.suffix.lower() in TEXT_EXTENSIONS or ".log" in p.name.lower() or is_well_known_log_name(p)
 
 
 def open_text(path: str | Path):
