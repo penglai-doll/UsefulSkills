@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from common.event_schema import make_event
-from common.io_utils import iter_text_lines
+from common.io_utils import iter_text_lines, candidate_stats
 from common.ip_normalize import extract_ip_chain
 
 KEYWORD_RE = re.compile(r"(login|failed|failure|error|exception|denied|blocked|drop|reject|union|select|upload|shell|cmd|admin|token|passwd|攻击|失败|错误)", re.I)
@@ -37,4 +37,4 @@ def parse(path: str | Path, file_entry: dict[str, Any], limit: int = 5000) -> di
         )
         if len(events) >= limit:
             break
-    return {"events": events, "stats": {"bad_line_count": 0, "parser": "generic_text"}}
+    return {"events": events, "stats": candidate_stats(events, limit, parser="generic_text")}

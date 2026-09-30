@@ -1,6 +1,6 @@
 interface:
   display_name: "WireToutetu"
-  short_description: "Indexed offline PCAP, CTF, and WebShell traffic analysis for compact local models."
+  short_description: "Offline PCAP and WebShell evidence for compact local models."
   default_prompt: |
     Use $wire-toutetu for this offline capture or saved case.
     Run platform-aware preflight, preserve the input hashes, and default to offline analysis.

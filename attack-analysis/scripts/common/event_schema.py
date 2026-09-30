@@ -43,6 +43,8 @@ def make_event(
         "event_status": "candidate",
         "evidence": evidence,
     }
+    if ts.get("error"):
+        event["timestamp_error"] = ts["error"]
     if extra:
         event.update(extra)
     return event

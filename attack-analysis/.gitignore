@@ -10,6 +10,8 @@ cache/
 report/
 __pycache__/
 *.pyc
+wiki/backups/
+wiki/proposals/
 !tests/fixtures/**/*.log
 !tests/fixtures/**/*.txt
 !tests/fixtures/**/*.json

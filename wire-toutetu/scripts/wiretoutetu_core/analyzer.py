@@ -18,7 +18,7 @@ from .contracts import stable_evidence_id
 from .protocols import extract_protocol_records
 from .preflight import run_preflight
 from .registry import load_registry, select_plugins
-from .tshark_backend import FIELD_AGGREGATOR, TSharkError, capture_inventory, extract_packets, iter_packet_index
+from .tshark_backend import FIELD_AGGREGATOR, TSharkError, capture_inventory, extract_packets, iter_packet_index, parsing_sidecar_fingerprint
 from .webshell_pipeline import apply_webshell_profiles
 
 
@@ -209,6 +209,12 @@ def _build_http(
         status = _integer(packet.get("http.response.code", ""))
         if status is None:
             continue
+        if 100 <= status < 200 and status != 101 and pending[stream]:
+            pending[stream][0].setdefault("informational_responses", []).append({
+                "packet": _integer(packet.get("frame.number", "")), "status": status,
+                "time": _float(packet.get("frame.time_epoch", "")),
+            })
+            continue
         request = pending[stream].popleft() if pending[stream] else {
             "packet": None,
             "time": None,
@@ -311,30 +317,43 @@ def _signals(packets: list[dict[str, str]]) -> set[str]:
 def _build_http2(packets: list[dict[str, str]], capture_sha256: str) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for packet in packets:
-        substream = packet.get("http2.streamid")
-        if not substream:
+        stream_ids = sorted({value for raw in packet.get("http2.streamid", "").split(FIELD_AGGREGATOR)
+                             if (value := _integer(raw)) is not None and value > 0})
+        frame = _integer(packet.get("frame.number", ""))
+        tcp_stream = _integer(packet.get("tcp.stream", ""))
+        if not stream_ids or frame is None or tcp_stream is None:
             continue
-        tcp_stream = packet.get("tcp.stream", "")
-        key = (tcp_stream, substream)
-        item = grouped.setdefault(key, {
-            "frames": [], "request": {}, "response": {}, "data_packets": 0,
-        })
-        item["frames"].append(_integer(packet.get("frame.number", "")))
-        if packet.get("http2.headers.method"):
-            item["request"]["method"] = packet["http2.headers.method"]
-        if packet.get("http2.headers.path"):
-            item["request"]["path"] = packet["http2.headers.path"]
-        if packet.get("http2.headers.status"):
-            item["response"]["status"] = _integer(packet["http2.headers.status"])
-        if packet.get("data.data"):
-            item["data_packets"] += 1
+        for substream in stream_ids:
+            key = (str(tcp_stream), str(substream))
+            item = grouped.setdefault(key, {
+                "frames": [], "request": {}, "response": {}, "data_packets": 0, "ambiguous_frames": [],
+            })
+            item["frames"].append(frame)
+            if len(stream_ids) > 1 or any(FIELD_AGGREGATOR in packet.get(field, "") for field in (
+                "http2.headers.method", "http2.headers.path", "http2.headers.status"
+            )):
+                # Flat TShark fields omit missing occurrences; parallel vectors
+                # cannot prove which headers or payload belong to each stream.
+                item["ambiguous_frames"].append(frame)
+                continue
+            if packet.get("http2.headers.method"):
+                item["request"]["method"] = packet["http2.headers.method"]
+            if packet.get("http2.headers.path"):
+                item["request"]["path"] = packet["http2.headers.path"]
+            if packet.get("http2.headers.status"):
+                item["response"]["status"] = _integer(packet["http2.headers.status"])
+            if packet.get("data.data"):
+                item["data_packets"] += 1
     transactions = []
     for (tcp_stream, substream), item in sorted(grouped.items(), key=lambda row: (int(row[0][0]), int(row[0][1]))):
         txn_id = stable_evidence_id("TXN", {"capture_sha256": capture_sha256, "protocol": "http2", "tcp_stream": tcp_stream, "substream": substream})
         transactions.append({
             "id": txn_id, "protocol": "http/2", "transport_index": {"tcp_stream": _integer(tcp_stream), "substream": _integer(substream)},
             "packet_range": [min(item["frames"]), max(item["frames"])], "request": item["request"], "response": item["response"],
-            "data_packets": item["data_packets"], "completeness": "complete" if item["request"] and item["response"] else "partial",
+            "data_packets": item["data_packets"],
+            "ambiguous_frames": item["ambiguous_frames"],
+            "completeness": "complete" if item["request"] and item["response"] and not item["ambiguous_frames"] else "partial",
+            "limitations": ["Multiple HTTP/2 frames share a packet; flat fields cannot reliably associate its headers/payload."] if item["ambiguous_frames"] else [],
         })
     return transactions
 
@@ -377,7 +396,9 @@ def analyze_capture(
         }
         state.write_manifest(manifest)
         manifest = state.read_manifest()
-    cache_key = state.stage_cache_key("inventory", include_sidecars=False)
+    cache_material = {"inventory": state.stage_cache_key("inventory", include_sidecars=False),
+                      "parsing_sidecars": parsing_sidecar_fingerprint(sidecar_paths), "parser_revision": "1.0.1"}
+    cache_key = hashlib.sha256(json.dumps(cache_material, sort_keys=True).encode("utf-8")).hexdigest()
     decode_cache_key = state.stage_cache_key("decode", include_sidecars=True)
     cached = manifest["stages"].get("inventory", {}).get("cache_key") == cache_key
     decode_cached = manifest["stages"].get("decode", {}).get("cache_key") == decode_cache_key
@@ -583,7 +604,7 @@ def analyze_capture(
     completeness = "complete"
     if any(flow["completeness"] == "truncated" for flow in flows):
         completeness = "truncated"
-    elif any(flow["completeness"] == "partial" for flow in flows):
+    elif any(flow["completeness"] == "partial" for flow in flows) or any(txn.get("completeness") == "partial" for txn in transactions):
         completeness = "partial"
     counts = {
         "packets": len(packets),

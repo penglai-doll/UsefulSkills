@@ -83,3 +83,13 @@ def safe_relpath(path: str | Path) -> str:
         return str(Path(path).resolve())
     except OSError:
         return str(path)
+
+
+def candidate_stats(events: list[dict], limit: int, *, parser: str, bad_line_count: int = 0) -> dict:
+    """Disclose a stopped scan without inventing the unseen candidate count."""
+    reached = len(events) >= limit
+    return {"parser": parser, "bad_line_count": bad_line_count,
+            "shown_count": len(events), "total_count": None if reached else len(events),
+            "limit": limit, "limit_reached": reached, "truncated": reached,
+            "scan_complete": not reached, "last_ref": events[-1]["raw_ref"] if events else None,
+            "invalid_timestamp_count": sum(bool(e.get("timestamp_error")) for e in events)}

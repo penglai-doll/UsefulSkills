@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "r_best": 0.0,
+  "baseline_set": false,
+  "iterations": 0,
+  "accepted": 0,
+  "rejected": 0,
+  "no_action": 0,
+  "early_stop": false,
+  "last_updated": "2026-09-03T00:00:00+00:00",
+  "history": []
+}

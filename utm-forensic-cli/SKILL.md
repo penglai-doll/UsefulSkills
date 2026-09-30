@@ -3,7 +3,9 @@ name: utm-forensic-cli
 description: Use when an agent must perform read-only disk-image forensics on macOS by controlling an isolated UTM Linux VM through utmctl, the UTM guest agent, SSH, or AppleScript (when utmctl is TCC-blocked), using Sleuth Kit/libewf/YARA; also covers user-requested evidence simulation boot (booting the seized image itself as a sandboxed, write-blocked UTM VM through a read-only NBD channel with a diff layer); not for general VM administration, write mounts, or executing recovered samples.
 ---
 
-# Skill: utm-forensic-cli v1.1.0
+# Skill: utm-forensic-cli
+
+Skill release: `1.1.1`
 
 在 macOS 上把 Agent 当作取证编排器：宿主机负责案例目录、证据登记、UTM 生命周期和结果收集；专用 UTM Linux VM 负责 E01/raw 暴露、只读挂载和 Linux 取证工具。默认不用 GUI，也不把整棵证据目录倾倒进上下文。
 
@@ -12,6 +14,8 @@ v1.1.0 新增（来自实战验证）：
 - `utmctl` 被 TCC 拒绝（OSStatus -1743）时的 **AppleScript/osascript 控制通道**（功能等价：list/status/start/stop/execute/push/pull/query ip）。
 - **检材仿真引导**模式：以扣押镜像为磁盘启动专用 UTM VM，经回环 NBD 只读服务器 + 差异层，绕开 App Store 沙盒对 QEMU 的文件访问限制。
 - 配套脚本：`nbd_evidence_server.py`、`nbd_selftest.py`、`make_qcow2_overlay.py`（均实战验证）。
+
+Resolve `<skill-root>` to this installed skill directory when invoking scripts; case outputs stay in the analyst working directory.
 
 ## Start
 
@@ -85,7 +89,7 @@ simulation-boot（用户明确要求时，与上述 TSK 通道并行）:
 先运行本 skill 自带的确定性检查器；它只读取元数据、工具帮助和可选的镜像摘要，不负责替代取证判断：
 
 ```bash
-python3 scripts/forensicctl.py preflight <evidence> \
+python3 <skill-root>/scripts/forensicctl.py preflight <evidence> \
   --hash sha256 \
   --inspect-image \
   --output-dir /absolute/case-output \
@@ -243,7 +247,7 @@ sha256sum /mnt/case/extracted/<safe-name> >> /mnt/case/raw/extracted-sha256.txt
 
 `tsk_recover` 只在用户明确要求恢复、输出空间已估算且目标分区已确认时执行；默认优先用 `icat` 定向提取。若用户提供 YARA 规则，可在 VM 内对提取目录或明确的只读挂载路径运行 `yara -r`，同时记录 YARA 版本、规则文件 Hash、扫描范围和原始结果。不得从网络自动下载规则，不得因命中就执行样本。
 
-只有用户明确需要正常目录树、应用配置或日志内容时才做文件系统 mount。按文件系统选择只读选项；对 ext4/类 Unix 文件系统优先 `ro,noload`，并用 `findmnt` 验证结果。不要把 `mount` 成功当作证据完整性证明。
+只有用户明确需要正常目录树、应用配置或日志内容时才做文件系统 mount。先识别文件系统，使用 `losetup --read-only` 并验证块设备只读，再选择专用参数：ext2/3/4 用 `ro,noload`，XFS 用 `ro,norecovery`，Btrfs 用本机支持的 `ro,nologreplay,skip_balance`。未知类型先停止识别，不能把 `noload` 泛用于所有 Unix 文件系统。用 `findmnt` 验证来源、目标与只读选项；`mount` 成功不能代替完整性验证。
 
 ## Triage and review
 
@@ -273,8 +277,9 @@ sha256sum /mnt/case/extracted/<safe-name> >> /mnt/case/raw/extracted-sha256.txt
 
 ## Resources
 
-- `scripts/forensicctl.py`：宿主机 preflight 与只读执行计划生成器；运行 `python3 scripts/forensicctl.py --help`。v1.1.0 起 `utmctl` 探测包含 TCC -1743 检测。
+- `scripts/forensicctl.py`：宿主机 preflight 与只读执行计划生成器；运行 `python3 <skill-root>/scripts/forensicctl.py --help`。v1.1.0 起 `utmctl` 探测包含 TCC -1743 检测。
 - `scripts/nbd_evidence_server.py`：检材仿真引导用的回环 NBD 只读服务器（O_RDONLY 基底 + 稀疏差异层 + 位图），先自测后使用。
+- 基底、差异文件和位图必须指向三个独立文件，拒绝同路径、符号链接或硬链接输出；qcow2 输出必须是新文件。路径检查失败时停止，不覆盖旧输出。
 - `scripts/nbd_selftest.py`：NBD 服务器线格式自测客户端（QEMU 握手模拟 + 首扇区读取校验）；VM 引导前必跑。
 - `scripts/make_qcow2_overlay.py`：手工构造 qcow2 v3 overlay（backing 只读）；仅适用于 QEMU 可合法读取 backing 路径的环境，沙盒 UTM 下改用 NBD。
 - [references/workflow.md](references/workflow.md)：完整状态机和 guest-agent/SSH/共享目录/AppleScript 路径。

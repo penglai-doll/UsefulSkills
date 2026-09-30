@@ -30,16 +30,22 @@ Usage:
 import os
 import struct
 import sys
+import argparse
+
+from evidence_paths import require_distinct_paths
 
 CLUSTER = 65536
 CLUSTER_BITS = 16
 
 def main(base_path, out_path):
+    require_distinct_paths(base_path, out_path)
     base_size = os.path.getsize(base_path)
     if base_size % 512:
         print("warning: base size is not sector-aligned", file=sys.stderr)
     # each L1 entry covers cluster_size * cluster_size / 8 = 512 MiB
     l1_size = (base_size + (512 * 1024 * 1024) - 1) // (512 * 1024 * 1024)
+    if l1_size > CLUSTER // 8:
+        raise ValueError("base image exceeds this minimal overlay's 4 TiB capacity")
 
     backing = os.path.abspath(base_path).encode("utf-8")
     backing_off = 112                    # right after the v3 base header
@@ -82,13 +88,13 @@ def main(base_path, out_path):
     for i in range(4):
         c3[i * 2:i * 2 + 2] = struct.pack(">H", 1)
 
-    with open(out_path, "wb") as f:
+    with open(out_path, "xb") as f:
         for c in (c0, c1, c2, c3):
             f.write(c)
 
     # parse-back self check
     with open(out_path, "rb") as f:
-        data = f.read(512)
+        data = f.read(CLUSTER)
     magic, ver, boff, blen, cbits, size = struct.unpack(">IIQIIQ", data[0:32])
     assert magic == 0x514649FB and ver == 3 and cbits == CLUSTER_BITS
     assert size == base_size
@@ -98,7 +104,11 @@ def main(base_path, out_path):
     print("self-check OK")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("usage: make_qcow2_overlay.py <base-raw-image> <output-overlay.qcow2>", file=sys.stderr)
-        sys.exit(2)
-    main(sys.argv[1], sys.argv[2])
+    parser = argparse.ArgumentParser(description="Create a new qcow2 overlay without modifying its backing evidence.")
+    parser.add_argument("base_image")
+    parser.add_argument("output_overlay")
+    args = parser.parse_args()
+    try:
+        main(args.base_image, args.output_overlay)
+    except (OSError, ValueError) as exc:
+        parser.exit(2, f"make_qcow2_overlay: {exc}\n")

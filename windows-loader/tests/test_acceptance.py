@@ -1422,22 +1422,22 @@ class LoaderAcceptanceCase(unittest.TestCase):
             self.assertIn(required_line, skill)
 
         config = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
-        self.assertEqual(
-            [
-                "interface:",
-                '  display_name: "Windows Loader"',
-                '  short_description: "Read-only Windows guest image mounting and focused forensic triage."',
-                '  default_prompt: "Use $windows-loader to mount this Windows guest image read-only and perform focused evidence triage."',
-            ],
-            [line for line in config.splitlines() if line],
-            "openai.yaml exposes only quoted interface fields",
-        )
+        lines = [line for line in config.splitlines() if line]
+        self.assertEqual("interface:", lines[0])
+        self.assertEqual(4, len(lines), "openai.yaml exposes only three interface fields")
+        fields = [re.fullmatch(r'  ([a-z_]+): "([^"\n]+)"', line) for line in lines[1:]]
+        self.assertTrue(all(fields), "interface fields are quoted strings")
+        self.assertEqual({"display_name", "short_description", "default_prompt"}, {field.group(1) for field in fields})
+        values = {field.group(1): field.group(2) for field in fields}
+        self.assertEqual("Windows Loader", values["display_name"])
+        self.assertTrue(25 <= len(values["short_description"]) <= 64)
         self.assertRegex(config, r'(?m)^interface:$')
         self.assertRegex(config, r'(?m)^  display_name: "[^"]+"$')
         self.assertRegex(config, r'(?m)^  short_description: "[^"]+"$')
         self.assertIn('default_prompt: "Use $windows-loader', config)
         self.assertNotIn("Use -loader", config)
-        self.assertIn("# Windows Loader v1", skill)
+        self.assertIn("# Windows Loader", skill)
+        self.assertRegex(skill, r"Skill release: `[0-9]+\.[0-9]+\.[0-9]+`")
 
     def test_task4_reviewed_contract_has_reproducible_state_routes_and_sources(self) -> None:
         """Exercise the reviewed document contract as structured operator data."""

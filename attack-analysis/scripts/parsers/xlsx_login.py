@@ -7,6 +7,7 @@ from typing import Any
 
 from common.event_schema import make_event
 from common.xlsx_utils import iter_rows
+from common.io_utils import candidate_stats
 
 
 def _index(header: list[str], *names: str) -> int | None:
@@ -22,7 +23,7 @@ def parse(path: str | Path, file_entry: dict[str, Any], limit: int = 10000) -> d
     try:
         _, header = next(rows)
     except StopIteration:
-        return {"events": [], "stats": {"bad_line_count": 0, "parser": "xlsx_login"}}
+        return {"events": [], "stats": candidate_stats([], limit, parser="xlsx_login")}
     login_time_i = _index(header, "LOGIN_TIME", "CREATE_TIME")
     ip_i = _index(header, "IP", "LOGIN_IP", "CLIENT_IP")
     user_i = _index(header, "USER_NAME", "LOGIN_NAME", "USERNAME")
@@ -50,4 +51,4 @@ def parse(path: str | Path, file_entry: dict[str, Any], limit: int = 10000) -> d
         )
         if len(events) >= limit:
             break
-    return {"events": events, "stats": {"bad_line_count": 0, "parser": "xlsx_login"}}
+    return {"events": events, "stats": candidate_stats(events, limit, parser="xlsx_login")}

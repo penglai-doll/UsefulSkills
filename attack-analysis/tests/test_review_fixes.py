@@ -29,7 +29,7 @@ from common.time_normalize import (  # noqa: E402
 
 
 def run_cmd(args):
-    return subprocess.run(args, cwd=ROOT, text=True, capture_output=True, check=True)
+    return subprocess.run(args, cwd=ROOT, encoding="utf-8", capture_output=True, check=True)
 
 
 def run_inventory(paths, workdir, extra_args=()):

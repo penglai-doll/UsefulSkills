@@ -41,6 +41,10 @@ touch "$IMAGE" 2>&1 | head -1                              # 应报 Operation no
 
 ### 2. 启动 NBD 服务器并自测
 
+基底、差异文件和位图必须是三个独立文件。服务器会在打开可写文件前拒绝同路径、符号链接、硬链接及别名冲突，位图落盘使用原子替换；发现冲突时更换案件输出路径，不覆盖或删除证据。`make_qcow2_overlay.py` 同样要求新的独立输出文件，不覆盖既有 overlay。
+
+脚本中的 `<skill>` 指安装后的 Skill 根目录，`$CASE_OUTPUT` 必须位于原始证据之外。
+
 ```bash
 cd "$CASE_OUTPUT"
 nohup python3 <skill>/scripts/nbd_evidence_server.py \

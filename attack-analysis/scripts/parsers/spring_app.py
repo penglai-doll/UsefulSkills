@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from common.event_schema import make_event
-from common.io_utils import iter_text_lines
+from common.io_utils import iter_text_lines, candidate_stats
 from common.ip_normalize import extract_ip_chain
 
 SPRING_RE = re.compile(
@@ -62,4 +62,4 @@ def parse(path: str | Path, file_entry: dict[str, Any], limit: int = 10000) -> d
         )
         if len(events) >= limit:
             break
-    return {"events": events, "stats": {"bad_line_count": bad, "parser": "spring_app"}}
+    return {"events": events, "stats": candidate_stats(events, limit, parser="spring_app", bad_line_count=bad)}

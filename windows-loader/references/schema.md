@@ -33,6 +33,8 @@ ACL_ERROR: NOT_EVIDENCE_OF_ABSENCE
 
 `mounts` 记录路线、设备、目标、精确只读验证和保留/清理状态；`windows_installations`、`users`、`path_hits` 与 `artifacts` 都使用有界信封；`routes` 记录展示给用户的可选路线和选择；`cleanup` 记录执行过或待执行的精确命令；`errors` 保留权限、解析和未尝试原因。
 
+resume 中的 `os.access(W_OK)` 只记录权限观察：可写时 `read_only=false`，拒绝访问时 `read_only=null`，同时保存 `access_writable` 和 `read_only_confidence=not-verified`。ACL 或文件权限不足不能证明块设备只读；继续案件前必须按当前终端参考核对实际设备与挂载状态。
+
 可选 CLI 字段如 `schema`、`mode`、`commands`、`findings`、`details_path` 可以扩展输出，但不能替代上述任何必填字段。
 
 ## 有界信封

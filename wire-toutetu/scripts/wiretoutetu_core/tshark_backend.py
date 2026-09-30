@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import csv
+import hashlib
+import io
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -179,10 +182,11 @@ def _sidecar_preferences(sidecars: Iterable[str | Path]) -> list[str]:
     for raw_path in sidecars:
         path = Path(raw_path).resolve()
         try:
-            head = path.read_bytes()[:128]
+            with path.open("rb") as handle:
+                head = handle.read(4096)
         except OSError:
             continue
-        if b"CLIENT_RANDOM " in head or b"CLIENT_HANDSHAKE_TRAFFIC_SECRET " in head:
+        if re.search(rb"(?m)^(?:CLIENT_RANDOM|(?:CLIENT|SERVER)_(?:EARLY_|HANDSHAKE_)?TRAFFIC_SECRET(?:_\d+)?)\s+[0-9a-fA-F]+\s+[0-9a-fA-F]+", head):
             preferences.append(f"tls.keylog_file:{path}")
         if path.suffix.lower() == ".json":
             try:
@@ -191,10 +195,34 @@ def _sidecar_preferences(sidecars: Iterable[str | Path]) -> list[str]:
                 continue
             if not isinstance(config, dict):
                 continue
-            for value in config.get("tshark_preferences", []):
+            configured = config.get("tshark_preferences", [])
+            if not isinstance(configured, list):
+                raise ValueError(f"tshark_preferences must be a list: {path}")
+            for value in configured:
                 if isinstance(value, str) and "\x00" not in value:
                     preferences.append(value)
     return preferences
+
+
+def parsing_sidecar_fingerprint(sidecars: Iterable[str | Path]) -> str:
+    """Only parsing inputs invalidate inventory; WebShell profiles affect decode."""
+    preferences = _sidecar_preferences(sidecars)
+    keylogs = {}
+    for value in preferences:
+        name, separator, filename = value.partition(":")
+        if not separator or name not in {"tls.keylog_file", "dtls.keylog_file"} or not filename:
+            continue
+        path = Path(filename).expanduser().resolve()
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            keylogs[str(path)] = digest.hexdigest()
+        except OSError:
+            keylogs[str(path)] = "unavailable"
+    material = json.dumps({"preferences": preferences, "keylogs": keylogs}, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
 
 
 def extract_packets(
@@ -246,7 +274,8 @@ def extract_packets(
             stderr=completed.stderr,
             returncode=completed.returncode,
         )
-    reader = csv.DictReader(completed.stdout.splitlines(), delimiter="\t", quotechar='"')
+    # str.splitlines() also splits the field aggregator (ASCII record separator).
+    reader = csv.DictReader(io.StringIO(completed.stdout), delimiter="\t", quotechar='"')
     packets = [{key: value or "" for key, value in row.items()} for row in reader]
     return TSharkExtraction(packets=packets, command=command, stderr=completed.stderr, fields=fields)
 

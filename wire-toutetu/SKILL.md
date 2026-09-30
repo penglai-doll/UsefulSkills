@@ -5,10 +5,14 @@ description: Analyze offline PCAP/PCAPNG/CAP and gzip packet captures for CTF tr
 
 # WireToutetu
 
+Skill release: `1.0.1`
+
+Resolve `<skill-root>` to the installed `wire-toutetu` directory when invoking its scripts; keep case outputs in the analyst's working directory.
+
 ## Operating contract
 
 - Treat captures and sidecars as offline evidence. Do not start live capture.
-- Run `scripts/wiretoutetu.py preflight --json` before the first analysis on a machine.
+- Run `python <skill-root>/scripts/wiretoutetu.py preflight --json` before the first analysis on a machine.
 - TShark is required. Detect Windows, Linux, or WSL explicitly. Ask before installing or upgrading tools or drivers.
 - Runtime is Python 3.10+ with `requirements.txt`; Scapy in `requirements-test.txt` is fixture-generation-only.
 - Default to `--network offline`. Before `--network on`, show the smallest proposed query/material and obtain confirmation.
@@ -27,7 +31,7 @@ description: Analyze offline PCAP/PCAPNG/CAP and gzip packet captures for CTF tr
 3. Analyze:
 
    ```text
-   python scripts/wiretoutetu.py analyze <capture> --case-dir <dir> --sidecar <path>
+   python <skill-root>/scripts/wiretoutetu.py analyze <capture> --case-dir <dir> --sidecar <path>
    ```
 
    Add `--question <text>` when the user has a specific question. Without one, reconstruct the complete event chain: time, endpoint, protocol, operation, target, result, evidence, and gaps.
@@ -35,9 +39,9 @@ description: Analyze offline PCAP/PCAPNG/CAP and gzip packet captures for CTF tr
 5. Query small views first. Default to 50 rows; follow the cursor instead of requesting oversized output:
 
    ```text
-   python scripts/wiretoutetu.py query --case-dir <dir> --view summary
-   python scripts/wiretoutetu.py query --case-dir <dir> --view timeline --limit 50
-   python scripts/wiretoutetu.py query --case-dir <dir> --view evidence --id <EVIDENCE-ID>
+   python <skill-root>/scripts/wiretoutetu.py query --case-dir <dir> --view summary
+   python <skill-root>/scripts/wiretoutetu.py query --case-dir <dir> --view timeline --limit 50
+   python <skill-root>/scripts/wiretoutetu.py query --case-dir <dir> --view evidence --id <EVIDENCE-ID>
    ```
 
 6. Answer the user's question first. Cite `FLOW-*`, `TXN-*`, `OBJ-*`, `DEC-*`, and `EVT-*`; list unresolved keys, missing segments, unsupported fields, and partial objects.
@@ -55,6 +59,8 @@ description: Analyze offline PCAP/PCAPNG/CAP and gzip packet captures for CTF tr
 
 - `FLOW-*`: endpoints, direction, packet/time range, byte count, retransmission/out-of-order/missing/truncated state.
 - `TXN-*`: protocol transaction; HTTP/2 stores TCP stream and substream.
+- HTTP 100/103 and other informational responses remain attached to their pending request; 101 completes the protocol switch. Multiplexed HTTP/2 packets whose flat fields cannot be associated carry `ambiguous_frames` and `partial` completeness; do not assign their headers or payloads by guesswork.
+- TLS key logs and TShark preferences invalidate inventory when they change. WebShell-only profiles invalidate decode while preserving inventory; re-run analysis after changing either input.
 - `OBJ-*`: source transaction, filename, magic, size, SHA-256, extraction path.
 - `DEC-*`: algorithm, non-secret parameter description, source, hashes, lengths, fixed decode status, error.
 - `EVT-*`: timeline observation.
@@ -65,11 +71,11 @@ description: Analyze offline PCAP/PCAPNG/CAP and gzip packet captures for CTF tr
 ## Knowledge and experience
 
 - `scripts/registry.yaml` is the plugin routing source. `references/registry.yaml` plus leaf frontmatter are the knowledge routing source.
-- Run `python scripts/build_indexes.py --check` and `python scripts/validate_catalog.py --check` after changing plugins, references, fixtures, or support levels.
+- Run `python <skill-root>/scripts/build_indexes.py --check` and `python <skill-root>/scripts/validate_catalog.py --check` after changing plugins, references, fixtures, or support levels.
 - Review at most five relevant lessons before analysis:
 
   ```text
-  python scripts/wiretoutetu.py experience review --signal <signal>
+  python <skill-root>/scripts/wiretoutetu.py experience review --signal <signal>
   ```
 
 - `经验.md` stores at most 12 stable lessons and 4 recent summaries under 12 KiB. Never place flags, IOCs, account values, raw keys, full payloads, or challenge answers there.

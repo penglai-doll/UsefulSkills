@@ -72,7 +72,7 @@ def to_iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
-def parse_timestamp(text: str | None, default_timezone: str | None = None) -> dict[str, str | None]:
+def _parse_timestamp(text: str | None, default_timezone: str | None = None) -> dict[str, str | None]:
     if not text:
         return {"timestamp": None, "status": "unknown", "raw": text}
     s = str(text)
@@ -123,6 +123,14 @@ def parse_timestamp(text: str | None, default_timezone: str | None = None) -> di
             status = "unknown"
         return {"timestamp": to_iso(dt), "status": status, "raw": compact.group("date")}
     return {"timestamp": None, "status": "unknown", "raw": text}
+
+
+def parse_timestamp(text: str | None, default_timezone: str | None = None) -> dict[str, str | None]:
+    """A malformed date is a record-level gap, never a whole-file failure."""
+    try:
+        return _parse_timestamp(text, default_timezone)
+    except (ValueError, OverflowError) as exc:
+        return {"timestamp": None, "status": "unknown", "raw": text, "error": str(exc)}
 
 
 def first_timestamp(text: str | None, default_timezone: str | None = None) -> str | None:

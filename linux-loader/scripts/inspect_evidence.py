@@ -381,6 +381,16 @@ def enumerate_partitions(path: Path) -> dict[str, Any]:
     return result
 
 
+def probe_whole_filesystem(path: Path) -> dict[str, Any]:
+    """Probe a filesystem image without mounting it or updating blkid's cache."""
+    if not shutil.which("blkid"):
+        return {"type": None, "error": "blkid unavailable; filesystem remains unknown"}
+    result = run_command(["blkid", "-p", "-s", "TYPE", "-o", "value", str(path)], timeout=20)
+    value = result["stdout"].strip()
+    return {"type": value if result["returncode"] == 0 and value else None,
+            "error": result["stderr"] or None}
+
+
 def _exists(root: Path, rel: str) -> bool:
     return (root / rel.lstrip("/")).exists()
 
@@ -881,6 +891,8 @@ def inspect_path(
         )
         if triage.get("triage_level"):
             result["triage_level"] = triage["triage_level"]
+    elif format_kind != "E01" and not result["partitions"]["items"]:
+        result["filesystem_probe"] = probe_whole_filesystem(path)
     return result
 
 

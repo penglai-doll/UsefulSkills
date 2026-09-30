@@ -3,7 +3,9 @@ name: windows-loader
 description: Use when mounting, inspecting, triaging, or extracting targeted forensic evidence from a Windows guest disk image (raw/dd/img, single or split E01, VHD, or VHDX) from the current Windows, Linux, or WSL terminal without writing to original evidence.
 ---
 
-# Windows Loader v1
+# Windows Loader
+
+Skill release: `1.0.1`
 
 Handle Windows **guest** evidence only. Keep original evidence read-only; do not execute guest binaries, services, scripts, installers, or document macros. Produce an interactive case summary, not a formal report.
 
@@ -40,17 +42,19 @@ If the selected environment cannot safely meet a prerequisite, stop and ask the 
 
 - `mount-only`: perform preflight, mount read-only, verify the mount, inventory only the Windows guest layout, retain a successful mount, and give cleanup commands.
 - `fast-path`: perform the same safe preflight and mount, then run the two-stage bounded search for the user-named artifact or product.
-- `mount-and-analyze`: perform `mount-only`, then request a narrowly scoped analysis target before reading artifacts.
+- `mount-and-analyze`: perform `mount-only`, then use the user's stated analysis target. Request a narrowly scoped target only when missing or ambiguous.
 
 Use bundled scripts only for deterministic local inspection and bounded output:
 
+Resolve `<skill-root>` to the installed `windows-loader` directory. Keep case outputs in the analyst's working directory.
+
 ```text
-python scripts/inspect_evidence.py --help
-python scripts/inspect_windows_tree.py --help
-python scripts/find_windows_paths.py --help
-python scripts/analyze_artifact.py --help
-python scripts/case_state.py --help
-python scripts/case_state.py init --case-dir ./tmp/windows-loader/<case-id> --image <evidence> --hash <now|later|skip> --mode <mount-only|fast-path|mount-and-analyze>
+python <skill-root>/scripts/inspect_evidence.py --help
+python <skill-root>/scripts/inspect_windows_tree.py --help
+python <skill-root>/scripts/find_windows_paths.py --help
+python <skill-root>/scripts/analyze_artifact.py --help
+python <skill-root>/scripts/case_state.py --help
+python <skill-root>/scripts/case_state.py init --case-dir ./tmp/windows-loader/<case-id> --image <evidence> --hash <now|later|skip> --mode <mount-only|fast-path|mount-and-analyze>
 ```
 
 SEARCH: TWO_STAGE_BOUNDED
@@ -79,3 +83,5 @@ COMMAND_LINE_SECRET_VALUE: PROHIBITED
 ## Finish each turn
 
 Persist case state outside original evidence. End every turn with absolute paths, whether plaintext secrets were written, mount state, exact cleanup status/commands, current hash status, and any confirmation still required. Keep successful mounts until the user asks for cleanup; clean partial failures immediately.
+
+On resume, `os.access(W_OK)` is only a permission observation: denied access leaves `read_only=null` and `read_only_confidence=not-verified`. Revalidate the device and mount through the selected environment's reference before continuing evidence reads.

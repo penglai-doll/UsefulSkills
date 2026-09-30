@@ -43,11 +43,15 @@ slow TCG boot cycles.
 from __future__ import annotations
 
 import os
+import argparse
 import socket
 import struct
 import sys
 import threading
 import time
+import tempfile
+
+from evidence_paths import open_diff, require_distinct_paths
 
 BLOCK = 4096
 NBD_MAGIC = 0x4E42444D41474943
@@ -99,6 +103,7 @@ class DiffLayer:
     """Sparse 4 KiB-block diff over a read-only base file."""
 
     def __init__(self, base_path: str, diff_path: str, bitmap_path: str) -> None:
+        require_distinct_paths(base_path, diff_path, bitmap_path)
         self.base = open(base_path, "rb", buffering=0)
         self.base.seek(0, os.SEEK_END)
         self.size = self.base.tell()
@@ -121,7 +126,11 @@ class DiffLayer:
                     # drop stray bits that index blocks beyond the base size
                     self.bitmap[-1] &= (0xFF << (8 - self.nblocks % 8)) & 0xFF
         diff_exists = os.path.exists(diff_path)
-        self.diff = open(diff_path, "r+b" if diff_exists else "w+b")
+        try:
+            self.diff = open_diff(diff_path, self.base)
+        except Exception:
+            self.base.close()
+            raise
         self.diff.seek(0, os.SEEK_END)
         diff_size = self.diff.tell()
         # A dirty bit whose diff bytes do not exist must never be served (that
@@ -177,10 +186,20 @@ class DiffLayer:
         self.flush()
         with self.lock:
             snapshot = bytes(self.bitmap)
-        with open(self.bitmap_path, "wb") as f:
-            f.write(snapshot)
-            f.flush()
-            os.fsync(f.fileno())
+        require_distinct_paths(self.base.name, self.diff_path, self.bitmap_path)
+        # Replacing an independent temporary file cannot truncate evidence
+        # through a bitmap path that was changed into an alias after startup.
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", dir=os.path.dirname(os.path.abspath(self.bitmap_path)), delete=False) as f:
+                temporary = f.name
+                f.write(snapshot)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temporary, self.bitmap_path)
+        finally:
+            if temporary and os.path.exists(temporary):
+                os.unlink(temporary)
         log("bitmap saved (%d dirty blocks)" % self._dirty_count())
 
     def close(self) -> None:
@@ -365,21 +384,21 @@ def serve_client(conn: socket.socket, addr, layer: DiffLayer) -> None:
             pass
 
 def main() -> None:
-    if len(sys.argv) != 5:
-        print("usage: nbd_evidence_server.py <base-image> <diff-file> <bitmap-file> <port>",
-              file=sys.stderr)
-        sys.exit(2)
-    base, diff_path, bitmap_path = sys.argv[1], sys.argv[2], sys.argv[3]
-    try:
-        port = int(sys.argv[4])
-    except ValueError:
-        print("nbd_evidence_server: invalid port %r (expected an integer between "
-              "1 and 65535)" % sys.argv[4], file=sys.stderr)
-        sys.exit(2)
+    parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
+    parser.add_argument("base_image")
+    parser.add_argument("diff_file")
+    parser.add_argument("bitmap_file")
+    parser.add_argument("port", type=int)
+    args = parser.parse_args()
+    base, diff_path, bitmap_path, port = args.base_image, args.diff_file, args.bitmap_file, args.port
     if not 1 <= port <= 65535:
         print("nbd_evidence_server: port %d out of range 1-65535" % port, file=sys.stderr)
         sys.exit(2)
-    layer = DiffLayer(base, diff_path, bitmap_path)
+    try:
+        layer = DiffLayer(base, diff_path, bitmap_path)
+    except (OSError, ValueError) as exc:
+        print(f"nbd_evidence_server: {exc}", file=sys.stderr)
+        sys.exit(2)
     log("base=%s (%d bytes, O_RDONLY) diff=%s" % (base, layer.size, diff_path))
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

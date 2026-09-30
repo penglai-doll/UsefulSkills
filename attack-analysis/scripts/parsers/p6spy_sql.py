@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from common.event_schema import make_event
-from common.io_utils import iter_text_lines
+from common.io_utils import iter_text_lines, candidate_stats
 from common.ip_normalize import extract_ip_chain
 
 SQL_RE = re.compile(r"(?P<inner_ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\s*\|.*?SQL\s*语句：(?P<sql>.*)$", re.I)
@@ -63,4 +63,4 @@ def parse(path: str | Path, file_entry: dict[str, Any], limit: int = 10000) -> d
         )
         if len(events) >= limit:
             break
-    return {"events": events, "stats": {"bad_line_count": bad, "parser": "p6spy_sql"}}
+    return {"events": events, "stats": candidate_stats(events, limit, parser="p6spy_sql", bad_line_count=bad)}

@@ -4,15 +4,17 @@
 
 ## Skills
 
-| 分类 | Skill | 用途 |
-| --- | --- | --- |
-| APK分析 | [`android-malware-analysis`](./android-malware-analysis/) | Android 样本固证与静态逆向 |
-| 服务器日志分析 | [`attack-analysis`](./attack-analysis/) | 服务器攻击日志溯源与事件报告 |
-| 磁盘取证(Linux) | [`linux-loader`](./linux-loader/) | Linux/WSL 镜像只读挂载与定向恢复 |
-| 磁盘取证(本地AI+Windows) | [`windows-loader`](./windows-loader/) | Windows 客体镜像只读挂载与取证排查 |
-| 磁盘取证(基于MacOS，面向Linux) | [`utm-forensic-cli`](./utm-forensic-cli/) | macOS 通过 UTM Linux VM 隔离取证 |
-| 流量分析 | [`wire-toutetu`](./wire-toutetu/) | PCAP、CTF 与 WebShell 流量分析 |
-| 写作辅助 | [`writing-helper`](./writing-helper/) | 降低 AI 味和表达压力，同时保留原意 |
+| 分类 | Skill | 版本 | 用途 |
+| --- | --- | --- | --- |
+| APK分析 | [`android-malware-analysis`](./android-malware-analysis/) | `8.1.2` | Android 样本固证与静态逆向 |
+| 服务器日志分析 | [`attack-analysis`](./attack-analysis/) | `1.0.1` | 服务器攻击日志溯源与事件报告 |
+| 磁盘取证(Linux) | [`linux-loader`](./linux-loader/) | `1.0.1` | Linux/WSL 镜像只读挂载与定向恢复 |
+| 磁盘取证(本地AI+Windows) | [`windows-loader`](./windows-loader/) | `1.0.1` | Windows 客体镜像只读挂载与取证排查 |
+| 磁盘取证(基于MacOS，面向Linux) | [`utm-forensic-cli`](./utm-forensic-cli/) | `1.1.1` | macOS 通过 UTM Linux VM 隔离取证 |
+| 流量分析 | [`wire-toutetu`](./wire-toutetu/) | `1.0.1` | PCAP、CTF 与 WebShell 流量分析 |
+| 写作辅助 | [`writing-helper`](./writing-helper/) | `1.0.1` | 降低 AI 味和表达压力，同时保留原意 |
+
+版本声明位于各 Skill 的 `SKILL.md`。本次修复与验证记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 安装
 
@@ -25,6 +27,10 @@ cp -R UsefulSkills/<skill-name> "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
 每个 Skill 可单独安装，不需要复制整个仓库。
+
+脚本调用中的 `<skill-root>` 指安装后的 Skill 目录，案件输出写在工作目录或用户指定路径；分析输入目录不需要含有 `scripts/`。
+
+维护仓库时可用 `python tools/check_skills.py` 检查全部 Skill 的元数据、引用、版本和脚本语法。行为验证仍需运行各 Skill 的测试及发布检查。
 
 (本目录下的Skills如需其他环境，一般AI会提前问你要不要安装，你同意的话就会自动安装)
 

@@ -47,6 +47,10 @@ def mount_options_for_fs(fs_type: str | None) -> list[str]:
     return ["ro"]
 
 
+SAFE_FILESYSTEMS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "vfat", "fat16", "fat32",
+                    "ntfs", "ntfs3", "exfat", "iso9660", "squashfs", "udf", "erofs"}
+
+
 def validate_resume(run_meta: dict[str, Any], current: dict[str, Any], active_mounts: list[str]) -> dict[str, Any]:
     blockers: list[str] = []
     warnings: list[str] = []
@@ -592,8 +596,9 @@ def plan_mounts(
                 "partition_id": "mounted-tree",
                 "mount_path": image_path,
                 "filesystem": "existing",
-                "options": ["ro-assumed"],
-                "readonly": True,
+                "options": [],
+                "readonly": None,
+                "note": "Existing directory; block-device read-only state has not been verified.",
                 "success": True,
                 "cleanup_command": None,
             }
@@ -693,26 +698,33 @@ def plan_mounts(
         image_path = str(Path(ewf_dir) / "ewf1")
 
     mount_candidates = [p for p in partitions if p.get("mount_candidate", True)]
-    if not mount_candidates and image_path:
+    if not partitions and image_path:
         mount_path = str(root / "whole-image")
-        options = ["ro", "loop"]
+        fs_type = (inspect_result.get("filesystem_probe") or {}).get("type") or "unknown"
+        options = mount_options_for_fs(fs_type) + ["loop"]
         commands.append(
             command_entry(
                 "mount-read-only",
-                ["mount", "-o", ",".join(options), str(image_path), mount_path],
+                ["mount", "-t", "vfat" if fs_type in {"fat16", "fat32"} else fs_type,
+                 "-o", ",".join(options), str(image_path), mount_path],
                 "mount whole image read-only when no partition table is available",
                 requires_privilege=True,
                 privilege=privilege,
+                blocked=fs_type not in SAFE_FILESYSTEMS,
+                block_reason="Identify the whole-image filesystem before mounting; no generic ro fallback." if fs_type not in SAFE_FILESYSTEMS else None,
             )
         )
         blocked = bool(commands[-1].get("blocked"))
+        commands[-1].pop("manual_command", None)
+        commands[-1]["verification_required"] = True
         mounts.append(
             {
                 "partition_id": "whole-image",
                 "mount_path": mount_path,
-                "filesystem": "unknown",
+                "filesystem": fs_type,
                 "options": options,
-                "readonly": True,
+                "readonly": None,
+                "requested_readonly": True,
                 "success": False if blocked else None,
                 "blocked": blocked,
                 "error": commands[-1].get("block_reason") if blocked else None,
@@ -725,25 +737,35 @@ def plan_mounts(
         number = part.get("number") or len(mounts) + 1
         mount_path = str(root / f"p{number}")
         options = mount_options_for_fs(part.get("filesystem"))
+        fs_type = part.get("filesystem") or "unknown"
         if part.get("start_offset") is not None:
             options = options + ["loop", f"offset={part['start_offset']}"]
+        if part.get("length"):
+            options += [f"sizelimit={part['length']}"]
+        unsafe = fs_type not in SAFE_FILESYSTEMS or part.get("start_offset") is None
         commands.append(
             command_entry(
                 "mount-read-only",
-                ["mount", "-o", ",".join(options), str(image_path), mount_path],
+                ["mount", "-t", "vfat" if fs_type in {"fat16", "fat32"} else fs_type,
+                 "-o", ",".join(options), str(image_path), mount_path],
                 f"mount partition {number} read-only",
                 requires_privilege=True,
                 privilege=privilege,
+                blocked=unsafe,
+                block_reason="Identify the partition filesystem and byte offset before mounting." if unsafe else None,
             )
         )
         blocked = bool(commands[-1].get("blocked"))
+        commands[-1].pop("manual_command", None)
+        commands[-1]["verification_required"] = True
         mounts.append(
             {
                 "partition_id": f"p{number}",
                 "mount_path": mount_path,
                 "filesystem": part.get("filesystem") or "unknown",
                 "options": options,
-                "readonly": True,
+                "readonly": None,
+                "requested_readonly": True,
                 "success": False if blocked else None,
                 "blocked": blocked,
                 "error": commands[-1].get("block_reason") if blocked else None,
@@ -752,6 +774,83 @@ def plan_mounts(
             }
         )
     return commands, mounts
+
+
+def execute_readonly_mount(command: dict[str, Any], mount: dict[str, Any]) -> None:
+    """Attach a write-blocked loop device before any filesystem mount."""
+    mount["success"] = False
+    mount["readonly"] = False
+    required = ["losetup", "blockdev", "findmnt", "mount", "umount"]
+    missing = [tool for tool in required if not shutil.which(tool)]
+    if missing:
+        mount["error"] = f"Read-only verification tools missing: {', '.join(missing)}"
+        command["result"] = {"returncode": None, "stderr": mount["error"], "stdout": ""}
+        return
+    args = [str(item) for item in command["command"]]
+    prefix = args[:args.index("mount")]
+    target = Path(mount["mount_path"])
+    if target.is_symlink() or os.path.ismount(target) or (target.exists() and any(target.iterdir())):
+        mount["error"] = "Mount target is occupied or is a symlink; choose an empty directory."
+        command["result"] = {"returncode": None, "stderr": mount["error"], "stdout": ""}
+        return
+    options = args[args.index("-o") + 1].split(",")
+    loop_options = []
+    fs_options = []
+    for option in options:
+        if option.startswith(("offset=", "sizelimit=")):
+            name, value = option.split("=", 1)
+            loop_options.extend(["--" + name, value])
+        elif option != "loop":
+            fs_options.append(option)
+    attach = run_command(prefix + ["losetup", "--find", "--show", "--read-only"] + loop_options + [args[-2]])
+    mount["loop_attach"] = attach
+    loop_device = attach["stdout"].strip()
+    if attach["returncode"] != 0 or not loop_device.startswith("/dev/loop") or "\n" in loop_device:
+        mount["error"] = attach["stderr"] or "Read-only loop attach failed."
+        command["result"] = attach
+        return
+    mount["loop_device"] = loop_device
+    readonly = run_command(prefix + ["blockdev", "--getro", loop_device])
+    mount["device_readonly_check"] = readonly
+    mounted = False
+    try:
+        if readonly["returncode"] != 0 or readonly["stdout"].strip() != "1":
+            mount["error"] = "Loop device read-only state could not be verified; mount was not attempted."
+            command["result"] = readonly
+            return
+        executed = list(args)
+        executed[executed.index("-o") + 1] = ",".join(fs_options)
+        executed[-2] = loop_device
+        command["executed_command"] = executed
+        result = run_command(executed, timeout=120)
+        command["result"] = result
+        mounted = result["returncode"] == 0
+        if not mounted:
+            mount["error"] = result["stderr"] or "Filesystem mount failed."
+            return
+        verification = run_command(["findmnt", "--json", "--mountpoint", str(target), "--output", "SOURCE,TARGET,FSTYPE,OPTIONS"])
+        mount["mount_verification"] = verification
+        try:
+            records = json.loads(verification["stdout"])["filesystems"]
+            record = records[0] if len(records) == 1 else {}
+            valid = (verification["returncode"] == 0 and record.get("source") == loop_device
+                     and Path(record.get("target", "")).resolve() == target.resolve()
+                     and record.get("fstype") == args[args.index("-t") + 1]
+                     and "ro" in record.get("options", "").split(","))
+        except (ValueError, KeyError, TypeError):
+            valid = False
+        if not valid:
+            mount["error"] = "Mounted source, target or read-only options could not be verified."
+            return
+        mount["readonly"] = True
+        mount["success"] = True
+        mount["cleanup_commands"] = [prefix + ["umount", str(target)], prefix + ["losetup", "-d", loop_device]]
+    finally:
+        if not mount["success"]:
+            if mounted:
+                mount["cleanup_result"] = run_command(prefix + ["umount", str(target)])
+                mount["needs_manual_cleanup"] = mount["cleanup_result"]["returncode"] != 0
+            mount["loop_detach_result"] = run_command(prefix + ["losetup", "-d", loop_device])
 
 
 def execute_plan(commands: list[dict[str, Any]], mounts: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -779,15 +878,17 @@ def execute_plan(commands: list[dict[str, Any]], mounts: list[dict[str, Any]]) -
         args = command.get("command") or []
         if not args:
             continue
-        result = run_command([str(item) for item in args], timeout=120)
-        command["result"] = result
         if command.get("stage") == "mount-read-only":
-            target = args[-1] if args else ""
-            for mount in mounts:
-                if mount.get("mount_path") == target:
-                    mount["success"] = result["returncode"] == 0
-                    if result["returncode"] != 0:
-                        mount["error"] = result["stderr"] or result["stdout"]
+            mount = next((item for item in mounts if item.get("mount_path") == args[-1]), None)
+            if mount is not None and mount.get("success") is None:
+                execute_readonly_mount(command, mount)
+        else:
+            command["result"] = run_command([str(item) for item in args], timeout=120)
+            if command["result"]["returncode"] != 0:
+                for item in mounts:
+                    item["success"] = False
+                    item["error"] = "Image exposure failed; dependent mounts were not attempted."
+                break
     return commands, mounts
 
 
@@ -813,8 +914,8 @@ def build_run_meta(
             "mount-read-only": "completed" if active else "planned",
         },
         "resume_supported": True,
-        "cleanup_commands": [item["cleanup_command"] for item in active if item.get("cleanup_command")],
-        "loop_devices": [],
+        "cleanup_commands": [cmd for item in active for cmd in item.get("cleanup_commands", [])],
+        "loop_devices": [item["loop_device"] for item in active if item.get("loop_device")],
         "ewf_mounts": [],
         "mounts": [{**item, "active": item.get("success") is True} for item in mounts],
         "selected_hash_policy": hash_policy,
@@ -961,7 +1062,8 @@ def main(argv: list[str] | None = None) -> int:
             {"fatal": False, "message": cmd.get("block_reason"), "stage": cmd.get("stage")}
             for cmd in commands
             if cmd.get("blocked") and cmd.get("block_reason")
-        ],
+        ] + [{"fatal": False, "message": item["error"], "stage": "mount-read-only"}
+             for item in mounts if item.get("error") and not item.get("blocked")],
     }
     output_files["mount_json"] = str(output_dir / "mount.json")
     output_files["inspect_json"] = write_json(output_dir / "inspect.json", inspect_result)

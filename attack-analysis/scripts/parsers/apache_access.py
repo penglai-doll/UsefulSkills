@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from common.event_schema import make_event
-from common.io_utils import iter_text_lines
+from common.io_utils import iter_text_lines, candidate_stats
 
 ACCESS_RE = re.compile(
     r'^(?P<ip>\S+) \S+ \S+ (?P<ts>\[[^\]]+\]) "(?P<method>\S+) (?P<path>[^" ]+)(?: (?P<proto>[^"]+))?" (?P<status>\d{3}|-) (?P<size>\S+)(?: "(?P<referer>[^"]*)" "(?P<ua>[^"]*)")?'
@@ -55,4 +55,4 @@ def parse(path: str | Path, file_entry: dict[str, Any], limit: int = 10000) -> d
         )
         if len(events) >= limit:
             break
-    return {"events": events, "stats": {"bad_line_count": bad, "parser": "apache_access"}}
+    return {"events": events, "stats": candidate_stats(events, limit, parser="apache_access", bad_line_count=bad)}

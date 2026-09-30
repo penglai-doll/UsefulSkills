@@ -404,7 +404,12 @@ def resume(case_dir: Path, limit: int) -> dict:
             continue
         try:
             writable = os.access(path, os.W_OK)
-            mounts.append({"path": str(path), "exists": True, "claimed_read_only": claimed, "read_only": not writable, "probe_status": "best-effort", "probe_method": "os.access(W_OK)", "read_only_confidence": "not-verified"})
+            # ACLs/file permissions can deny access on a writable volume.
+            # A permission probe cannot establish device write blocking.
+            mounts.append({"path": str(path), "exists": True, "claimed_read_only": claimed,
+                           "read_only": False if writable else None, "access_writable": writable,
+                           "probe_status": "best-effort", "probe_method": "os.access(W_OK)",
+                           "read_only_confidence": "not-verified"})
         except OSError as error:
             mounts.append({"path": str(path), "exists": True, "claimed_read_only": claimed, "read_only": None, "probe_status": "unverifiable", "probe_method": "os.access(W_OK)", "probe_error": str(error)})
     document = dict(session)

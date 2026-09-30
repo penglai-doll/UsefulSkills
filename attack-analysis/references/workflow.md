@@ -2,7 +2,7 @@
 
 ## Modes
 
-Mode selection is a hard preflight gate. Before running any tool, ask the user to choose `quick-report` or `interactive` unless the current user request already names one of them. Do not reuse a previous turn's mode silently.
+Mode selection is a hard preflight gate. Reuse the user's explicit `quick-report` or `interactive` choice for the same case. Ask before running tools only when no choice exists or the case/scope changed; continuing a case does not require repeated mode confirmation.
 
 ### quick-report
 Use for emergency response. Defaults:
@@ -25,7 +25,7 @@ Use for deep investigation. Confirm before extraction:
 ## State Machine
 
 ```text
-mode-confirmation -> paths -> inventory -> manifest -> optional-confirmation -> extraction -> correlation -> AI review -> enrichment -> report
+mode-confirmation -> paths -> inventory -> manifest -> optional-confirmation -> extraction -> correlation -> AI review -> enrichment -> report -> case-trace
 ```
 
 ## Command Resolution
@@ -38,13 +38,25 @@ python3 <skill-root>/scripts/extract_log_events.py --manifest "$PWD/cache/<case-
 python3 <skill-root>/scripts/correlate_events.py --events "$PWD/cache/<case-id>/event-candidates.json" --output-dir "$PWD/cache/<case-id>/" --json
 ```
 
-- `mode-confirmation`: require an explicit current-turn choice of `quick-report` or `interactive`.
+- `mode-confirmation`: record the explicit choice of `quick-report` or `interactive` and retain it across turns for this case.
 - `inventory`: discover files, estimate size/line counts, detect compression, sample safely, infer log type and time range.
 - `manifest`: record mode, default time zone, per-file overrides, include flags, network status, and analysis notes.
 - `extraction`: stream logs through parser modules and emit compact events.
 - `correlation`: group candidates conservatively. Scripts do not assert attacker intent.
+- Coverage gaps: inspect `parser_stats`, `partial`, `truncated` and `unresolved_time_event_ids`. At a cap, `total_count=null` means the remaining candidates were not counted; `last_ref` is the last emitted line/row, not proof that the full file was scanned. Invalid dates remain in the evidence and do not abort following records. Time joins require a resolved offset and normalize to UTC.
 - `AI review`: compare events against logs, reject noise, build attack chain, call out missing evidence.
 - `report`: write Markdown with evidence references and uncertainty.
+- `case-trace`: close the case by freezing a raw-layer experience trace:
+
+```bash
+python3 <skill-root>/scripts/wiki_cli.py capture-trace \
+  --case-dir "$PWD/cache/<case-id>" --outcome pass \
+  --notes "what worked, what failed, workarounds found"
+```
+
+The trace (`case-trace.json`) is immutable once written. During case analysis
+do not read `<skill-root>/wiki/` — wiki access is reserved for evolution
+sessions ([evolution.md](./evolution.md)).
 
 ## Large Logs
 
@@ -73,5 +85,6 @@ $PWD/cache/<case-id>/
   event-candidates.json
   correlation-candidates.json
   ip-enrichment.json
+  case-trace.json
 $PWD/report/<case-id>/log-analysis-report.md
 ```

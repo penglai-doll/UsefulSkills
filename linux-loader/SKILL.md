@@ -3,20 +3,22 @@ name: linux-loader
 description: Use when Codex needs to mount, inspect, triage, or perform focused forensic recovery from Linux server disk evidence images in WSL2 or Linux, including raw/dd/img and E01 evidence, BT/aaPanel or 1Panel recovery, website/database/log recovery, Docker volume and bind-mount analysis, or read-only baseline evidence reconnaissance.
 ---
 
-# Linux Loader v1.0.0
+# Linux Loader
+
+Skill release: `1.0.1`
 
 AI-led, script-assisted Linux evidence mounting and triage. Use local tools first, keep evidence read-only, keep context small for local models, and load detailed references only when routing or the user goal requires them.
 
 ## Start
 
-Ask these questions before running tools:
+Use the path, hash policy, mode and goal already supplied for this case. Ask only for missing or ambiguous choices before running tools:
 
 1. Evidence path: require a WSL-accessible path. If the user provides a Windows path, suggest `wslpath`.
 2. Hash policy: ask `now`, `later`, or `skip`; if `now` or `later`, ask for `md5`, `sha1`, `sha256`, or a comma-separated set.
 3. Task mode:
    - `mount-only`: mount read-only and produce compact baseline reconnaissance.
    - `fast-path`: use when the user already states a target such as Docker, BT/aaPanel, 1Panel, website, database, or logs.
-   - `mount-and-analyze`: mount read-only, then ask for the focused analysis goal before loading detailed references.
+    - `mount-and-analyze`: mount read-only, then use the stated analysis goal; ask only when it is missing.
 
 Never execute binaries, scripts, services, containers, or application code from mounted evidence.
 
@@ -34,7 +36,7 @@ cleanup-guidance
 - `preflight`: validate path/readability, WSL2 context, automatic sudo probe, absolute output path, mount-root conflict, loop probe, `losetup -P` probe, FUSE permission probe, and resume state.
 - `hash-decision`: record `now`, `later`, or `skip`; never compute hashes without user choice.
 - `expose-image`: use raw/dd/img directly; for E01 prefer `ewfmount` only when FUSE works, otherwise offer `ewfexport` with size/time/free-space estimates.
-- `mount-read-only`: select filesystem-specific read-only options; do not repair filesystems.
+- `mount-read-only`: identify the filesystem, attach a read-only loop device, verify `blockdev --getro=1`, then apply filesystem-specific options and verify the exact source/target and `ro` with `findmnt`. An unknown filesystem blocks mounting; do not repair filesystems.
 - `os-triage`: classify `system`, `data`, `mixed`, or `unknown`; skip deep OS checks for data-only images.
 - `service-triage`: detect web, database, Docker, panels, common data roots, and logs with bounded scans.
 - `route-references`: load only required references. Mention optional references without reading them unless needed.
@@ -43,9 +45,11 @@ cleanup-guidance
 
 Use scripts for deterministic facts and compact JSON only:
 
+Resolve `<skill-root>` to the installed `linux-loader` directory; case outputs remain relative to the analyst's working directory.
+
 ```bash
-python3 scripts/inspect_evidence.py <path> --hash none --json
-python3 scripts/mount_evidence.py <path> --dry-run --case-id <case-id> --json
+python3 <skill-root>/scripts/inspect_evidence.py <path> --hash none --json
+python3 <skill-root>/scripts/mount_evidence.py <path> --dry-run --case-id <case-id> --json
 ```
 
 Required script behavior:
@@ -57,7 +61,8 @@ Required script behavior:
 - `--triage-level fast` skips the deep probes mount planning does not need (os profile, panel scan, Docker metadata walk, and the privileged loop probe); `full` runs everything. `--dry-run` reports loop support as unknown instead of probing.
 - Write outputs outside mounted evidence under an absolute `output/linux-loader/<case-id>/` path by default.
 - Use `/mnt/evidence_mount/<case-id>/` only for read-only mount targets unless preflight detects a conflict, then choose a case-specific alternate.
-- Privilege handling is automatic: try root, then `sudo -n true`. If unavailable, emit `blocked=true`, `manual_command`, and `user_choices` (`manual_sudo`, `interactive_sudo`); do not add a user-facing sudo mode or try a bare privileged `mount`.
+- Privilege handling is automatic: try root, then `sudo -n true`. If unavailable, emit `blocked=true` and `user_choices` (`manual_sudo`, `interactive_sudo`). Re-run this helper in a trusted elevated terminal for mounting; never copy a raw planned mount command that bypasses device checks. Other prerequisite commands may expose `manual_command`.
+- Planned mounts have `readonly=null`; only successful device and mount checks set `readonly=true`. Existing directory inputs also keep `readonly=null`. Save attached loop devices and both unmount/detach cleanup commands in case state.
 - For E01, if `ewfmount` is missing, ask before planning `apt-get install -y ewf-tools`; if apt/sudo is unavailable, offer `download_portable_ewftools` using wget/curl into a temporary cache directory, never a system path or mounted evidence.
 - If FUSE is unavailable, do not plan `ewfmount`; ask whether to elevate/repair FUSE or use `ewfexport` raw fallback when available.
 - Keep model-facing JSON compact. Do not include full logs, full recursive listings, full Docker metadata, complete histories, secrets, or large file contents.

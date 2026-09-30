@@ -5,11 +5,13 @@ description: Use when analyzing server attack logs and producing a Markdown inci
 
 # Attack Analysis
 
+Skill release: `1.0.1`
+
 AI-led, script-assisted server attack log reconstruction. Use scripts for deterministic inventory, parsing, normalization, and candidate correlations; use AI judgment to confirm scope, link events, explain attack flow, and write the final report.
 
 ## Start
 
-Before running inventory, parsing, enrichment, or report generation, confirm exactly one mode with the user unless the current user request explicitly names `quick-report` or `interactive`. Do not infer a mode from urgency, provided paths, or previous turns.
+Before running inventory, parsing, enrichment, or report generation, use exactly one mode: `quick-report` or `interactive`. Reuse the user's explicit choice for the same case across turns; ask only if no choice exists or the case/scope changed. Do not infer a mode from urgency or provided paths.
 
 - `quick-report`: emergency-first. Accept paths, inventory all recognizable logs, use defaults, run extraction/correlation, and produce a first Markdown report with uncertainties called out.
 - `interactive`: investigation-first. Confirm included files, declared log types, per-file time zones, target time range, and focus questions before extraction.
@@ -20,7 +22,7 @@ Default network assist is enabled for public enrichment. If networking fails, re
 
 ## Workflow
 
-1. Confirm mode: `quick-report` or `interactive`; never start work without an explicit current-turn mode choice.
+1. Record the user's mode choice: `quick-report` or `interactive`; reuse it while continuing the same case.
 2. Run inventory on user-provided files or directories.
 3. Build or update `analysis-manifest.json` with mode, default time zone, per-file type/time-zone fields, include decisions, and network status.
 4. In `interactive`, ask the user to confirm file inclusion, type, time range, and per-file time zone when detection is ambiguous.
@@ -29,6 +31,7 @@ Default network assist is enabled for public enrichment. If networking fails, re
 7. Use AI to review candidate events/correlations, reject noise, and promote only evidence-backed attack-chain steps.
 8. Enrich attacker IP/domain/ASN/public vulnerability context when useful; keep external enrichment separate from log evidence.
 9. Write `$PWD/report/<case-id>/log-analysis-report.md` with timeline, source IPs, attack process, evidence, current problems, remediation, and limitations.
+10. Close the case: capture an execution trace for the experience loop (`capture-trace`, outcome `pass`/`fail` plus analyst notes).
 
 Detailed workflow: [workflow.md](./references/workflow.md)
 
@@ -49,6 +52,7 @@ Script roles:
 - `inventory_logs.py`: file discovery, type detection, size strategy, time-range hints, and manifest seed.
 - `extract_log_events.py`: dispatcher only; calls parsers under `scripts/parsers/`.
 - `correlate_events.py`: conservative candidate grouping only; does not assert causality.
+- `wiki_cli.py`: experience-evolution harness (`capture-trace`, `consolidate`, `propose`, `evaluate`, `validate-wiki`, `status`); reserved for evolution sessions, see [evolution.md](./references/evolution.md).
 
 ## Log Coverage
 
@@ -62,6 +66,7 @@ Read [log-types.md](./references/log-types.md) before claiming support.
 
 - Every report claim needs log evidence, external enrichment, or explicit analyst inference.
 - Preserve raw references as file path plus line number or row number where possible.
+- Treat extraction `partial`/`truncated`, parser limits and correlation `unresolved_time_event_ids` as coverage gaps. Invalid dates remain record-level candidates; unknown time zones are excluded from temporal joins. Report the last scanned reference and narrow the range or increase the cap before claiming full coverage.
 - Normalize IPs and ports, but preserve original values.
 - Distinguish confirmed log facts, candidate correlations, external enrichment, and AI inference.
 - Do not output threat scores, risk totals, numeric severity ratings, or “battle power” style labels.
@@ -84,6 +89,16 @@ v1 is a log-sourced attack reconstruction report skill. It is not a real-time SI
 
 Do not actively scan attacker infrastructure, visit suspected callback URLs, exploit vulnerabilities, block IPs, change firewalls, delete files, or modify production systems unless the user explicitly starts a separate remediation task.
 
+## Experience and Evolution
+
+The skill carries a WikiSkill-style three-layer experience architecture (theory: arXiv:2608.27454), implemented by `scripts/wiki_cli.py`:
+
+- **Raw layer**: one immutable `case-trace.json` per closed case under `$PWD/cache/<case-id>/` (plus the case artifacts themselves). Captured with `capture-trace` at workflow step 10.
+- **Wiki layer**: `<skill-root>/wiki/` — `patterns/` pages (PROBLEM → ROOT CAUSE → FIX), `index.md` catalog, `logs.md` evolution log, and the harness-owned `skill-impact.md`/`state.json`. Updated only by the Wiki Maintainer role via `consolidate`; never rolled back.
+- **Skills layer**: `SKILL.md`, `references/`, `scripts/`, `tests/`, `PURPOSE.md`. Changed only through gated atomic proposals (`propose` + `evaluate`): accept iff the validation gate is green and the score strictly improves `R_best`; otherwise roll back.
+
+Role separation is mandatory: during a case analysis (this workflow) do **not** read or edit `wiki/` — case work runs on the skills layer alone. The wiki is only read and written in dedicated evolution sessions (maintainer consolidates trace batches; proposer stages one atomic skill change; the gate decides). Full protocol: [evolution.md](./references/evolution.md).
+
 ## Resources
 
 - [workflow.md](./references/workflow.md): modes, state machine, large-log handling.
@@ -93,3 +108,5 @@ Do not actively scan attacker infrastructure, visit suspected callback URLs, exp
 - [reporting.md](./references/reporting.md): Markdown report contract.
 - [error-handling.md](./references/error-handling.md): malformed logs and mismatch handling.
 - [validation.md](./references/validation.md): required checks before publishing changes.
+- [evolution.md](./references/evolution.md): three-layer experience architecture and the four-component evolution loop.
+- [PURPOSE.md](./PURPOSE.md): skill-to-pattern motivation map (skills layer contract).

@@ -15,6 +15,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from common.io_utils import is_gzip, is_probably_text, is_well_known_log_name, is_xlsx, iter_text_lines, safe_relpath
+from common.cli_utils import configure_stdio
 from common.output_layout import CasePaths, default_case_id, prepare_case_paths, resolve_case_paths
 from common.time_normalize import clear_timezone_notes, parse_timestamp, timezone_notes
 from common.xlsx_utils import iter_rows, read_header
@@ -270,6 +271,7 @@ def build_manifest(args: argparse.Namespace, case_paths: CasePaths) -> dict[str,
 
 
 def main() -> int:
+    configure_stdio()
     parser = argparse.ArgumentParser(description="Inventory server logs for attack-analysis.")
     parser.add_argument("paths", nargs="+", help="Files or directories to inventory")
     parser.add_argument(

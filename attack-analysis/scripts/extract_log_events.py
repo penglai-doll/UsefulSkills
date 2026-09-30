@@ -14,6 +14,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from common.time_normalize import clear_timezone_notes, timezone_notes
+from common.cli_utils import configure_stdio
 
 PARSER_MAP = {
     "web_access": ["parsers.apache_access"],
@@ -43,6 +44,8 @@ def call_parser(module_name: str, path: str, file_entry: dict[str, Any], limit: 
 
 
 def extract(manifest: dict[str, Any], limit_per_file: int) -> dict[str, Any]:
+    if limit_per_file < 1:
+        raise ValueError("limit_per_file must be positive")
     events: list[dict[str, Any]] = []
     parser_stats: list[dict[str, Any]] = []
     default_tz = manifest.get("default_timezone")
@@ -73,9 +76,12 @@ def extract(manifest: dict[str, Any], limit_per_file: int) -> dict[str, Any]:
         "event_count": len(events),
         "events": events,
         "parser_stats": parser_stats,
+        "truncated": any(stat.get("truncated") for stat in parser_stats),
+        "partial": any(stat.get("truncated") or stat.get("error") or stat.get("invalid_timestamp_count") for stat in parser_stats),
     }
     tz_notes = timezone_notes()
     if tz_notes:
+        result["partial"] = True
         # Surface timezone degradation (e.g. missing tzdata on Windows) loudly
         # instead of leaving silently naive timestamps in the events.
         result["timezone_notes"] = tz_notes
@@ -85,12 +91,15 @@ def extract(manifest: dict[str, Any], limit_per_file: int) -> dict[str, Any]:
 
 
 def main() -> int:
+    configure_stdio()
     parser = argparse.ArgumentParser(description="Extract compact event candidates from attack-analysis manifest.")
     parser.add_argument("--manifest", required=True, help="Path to analysis-manifest.json")
     parser.add_argument("--output-dir", help="Directory for event-candidates.json")
     parser.add_argument("--limit-per-file", type=int, default=10000)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
+    if args.limit_per_file < 1:
+        parser.error("--limit-per-file must be positive")
 
     data = extract(load_manifest(args.manifest), args.limit_per_file)
     if args.output_dir:
