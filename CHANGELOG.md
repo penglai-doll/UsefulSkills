@@ -1,5 +1,11 @@
 # 更新记录
 
+## 2026-11-11　android-malware-analysis 10.0.0
+
+本版正式支持雷电 9 动态分析，ARM64 真机仅提供参考方案。雷电 9.5.37.0 / Android 9 的十项设备场景全部通过。针对冷启动时链接器退出的问题，修复后的同一实验 APK 连续三次取得 Java、密码调用、JNI 与原生函数的完整观测。另用公开 DEX 完成运行字节导出、哈希核验与独立静态重检，并用自有诊断标记验证普通、人工复核、恢复普通三种观测结果。
+
+固证报告改为四章离线 HTML，保留 Markdown、JSON、原始附件与历史报告。发布检查分别列出正式支持范围及双平台验收状态。[实现与验证记录](./android-malware-analysis/references/10.0.0-implementation-status.md)
+
 ## 2026-10-01：android-malware-analysis 9.0.0
 
 依据 WikiSkill 的 Algorithm 1 新增独立实验入口：空 Skill/Wiki 基线、完整训练轨迹、真实

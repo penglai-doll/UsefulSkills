@@ -6,7 +6,7 @@
 
 | 分类 | Skill | 版本 | 用途 |
 | --- | --- | --- | --- |
-| APK分析 | [`android-malware-analysis`](./android-malware-analysis/) | `9.0.0` | Android 样本固证与静态逆向；WikiSkill 方法实验 |
+| APK分析 | [`android-malware-analysis`](./android-malware-analysis/) | `10.0.0` | Android 样本固证、静态逆向、雷电 9 动态调试与离线 HTML 报告 |
 | 服务器日志分析 | [`attack-analysis`](./attack-analysis/) | `1.0.1` | 服务器攻击日志溯源与事件报告 |
 | 磁盘取证(Linux) | [`linux-loader`](./linux-loader/) | `1.0.1` | Linux/WSL 镜像只读挂载与定向恢复 |
 | 磁盘取证(本地AI+Windows) | [`windows-loader`](./windows-loader/) | `1.0.1` | Windows 客体镜像只读挂载与取证排查 |
@@ -54,7 +54,8 @@ cp -R UsefulSkills/<skill-name> "${CODEX_HOME:-$HOME/.codex}/skills/"
 
 - **简介：** 主要用于分析各种APK（包含但不限于zhapian、dubo、luoliao等黑灰产APP），基本能够满足工作要求
 
-- **用法：** 提供 APK、APKS、XAPK、ZIP 或已解包目录，并选择 `evidence`（固证）或 `reverse`（逆向）模式。
+- **用法：** 提供 APK、APKS、XAPK、ZIP、独立 DEX 或已解包目录，并选择 `evidence`（固证）或 `reverse`（逆向）模式。
+- **动态调试**　10.0.0 正式支持雷电 9，ARM64 真机提供参考方案。冷启动、DEX 恢复和干预对照的实测范围见 [设备验收记录](./android-malware-analysis/references/10.0.0-implementation-status.md)。
 - **优点：** 分离固证与逆向目标；覆盖资源、Java/Smali、隐藏载荷和 Native/SO；结论带证据 ID、来源、位置与状态，便于复核。
 - **演化实验：** 9.0.0 实现 [WikiSkill Algorithm 1](./android-malware-analysis/references/wikiskill.md) 的三角色循环、严格验证提分门和持续 Wiki，可用当前 Codex 的独立 Agent，无需配置本地模型。实验产生的 Skill 留在独立工作区；Android 小型试验不能代替论文原始五个基准的数值复现。验证记录见 [9.0.0-validation.md](./android-malware-analysis/references/9.0.0-validation.md)。
 
