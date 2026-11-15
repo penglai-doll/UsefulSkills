@@ -1,5 +1,9 @@
 # 更新记录
 
+## 2026-11-16　android-malware-analysis 10.0.1
+
+增加 PCAP/PCAPNG 后台响应提取、多轮进程与出站帧核对、分范围 APK 验签和可选模板 Word 导出。流量来源、未匹配调用和覆盖限制可逐项复核。[输入与用法](./android-malware-analysis/references/offline-traffic.md)
+
 ## 2026-11-11　android-malware-analysis 10.0.0
 
 本版正式支持雷电 9 动态分析，ARM64 真机仅提供参考方案。雷电 9.5.37.0 / Android 9 的十项设备场景全部通过。针对冷启动时链接器退出的问题，修复后的同一实验 APK 连续三次取得 Java、密码调用、JNI 与原生函数的完整观测。另用公开 DEX 完成运行字节导出、哈希核验与独立静态重检，并用自有诊断标记验证普通、人工复核、恢复普通三种观测结果。

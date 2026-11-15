@@ -6,7 +6,7 @@
 
 | 分类 | Skill | 版本 | 用途 |
 | --- | --- | --- | --- |
-| APK分析 | [`android-malware-analysis`](./android-malware-analysis/) | `10.0.0` | Android 样本固证、静态逆向、雷电 9 动态调试与离线 HTML 报告 |
+| APK分析 | [`android-malware-analysis`](./android-malware-analysis/) | `10.0.1` | Android 样本固证、雷电 9 动态取证、后台网址与回连核验、离线 HTML 和模板 Word 报告 |
 | 服务器日志分析 | [`attack-analysis`](./attack-analysis/) | `1.0.1` | 服务器攻击日志溯源与事件报告 |
 | 磁盘取证(Linux) | [`linux-loader`](./linux-loader/) | `1.0.1` | Linux/WSL 镜像只读挂载与定向恢复 |
 | 磁盘取证(本地AI+Windows) | [`windows-loader`](./windows-loader/) | `1.0.1` | Windows 客体镜像只读挂载与取证排查 |
